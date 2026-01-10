@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{{ course.title }} — Задания и баллы</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    body { background-color: #f8f9fa; color: #333; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .panel-card { border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); border: 1px solid #eee; background: #fff; }
+    .list-item {
+      cursor: pointer; padding: 10px 12px; border-radius: 8px; transition: .15s;
+      border: 1px solid transparent;
+    }
+    .list-item:hover { background: #f1f3f5; }
+    .list-item.active {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: #111;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .list-item.active .small-muted { color: #4b5563; }
+
+    .small-muted { font-size: .85rem; color: #6c757d; }
+    .badge-soft {
+      background: #eef2ff; color: #4f46e5; border: 1px solid #e0e7ff;
+      padding: 4px 8px; border-radius: 8px; font-size: .8rem; font-weight: 600;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container py-5" id="page" data-course-id="{{ course.id }}">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm mb-2">
+        <i class="bi bi-arrow-left"></i> Назад к курсу
+      </a>
+      <h2 class="m-0 fw-bold">Задания и баллы</h2>
+      <div class="text-muted small mt-1">
+        <span class="fw-semibold">{{ course.title }}</span> · {{ course.year }} · {{ course.semester }} семестр
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5">
+      <div class="panel-card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="fw-bold">Задания (практики)</div>
+          <span class="badge bg-secondary" id="practiceCount">{{ practices|length }}</span>
+        </div>
+
+        <div class="mb-3">
+          <div class="small-muted mb-1">Создать задание</div>
+          <input class="form-control mb-2" id="pTitle" placeholder="Например: Практика 1 — ЛР">
+          <div class="row g-2">
+            <div class="col">
+              <input class="form-control" id="pMin" type="number" step="0.5" placeholder="Мин" value="0">
+            </div>
+            <div class="col">
+              <input class="form-control" id="pMax" type="number" step="0.5" placeholder="Макс" value="10">
+            </div>
+          </div>
+
+          <button class="btn btn-primary w-100 mt-2" type="button" onclick="createPractice()">
+            <i class="bi bi-plus-circle me-1"></i> Добавить
+          </button>
+
+          <div class="small-muted mt-2">
+            Эти задания доступны во всех группах курса.
+          </div>
+        </div>
+
+        <div id="practiceList">
+          {% if practices %}
+            {% for p in practices %}
+              <div class="list-item practice-item"
+                   data-id="{{ p.id }}"
+                   data-title="{{ p.title }}"
+                   data-min="{{ p.min_score }}"
+                   data-max="{{ p.max_score }}"
+                   onclick="selectPractice(this)">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="fw-semibold text-truncate">{{ p.title }}</div>
+                  <span class="badge-soft ms-2">{{ p.min_score }}—{{ p.max_score }}</span>
+                </div>
+                <div class="small-muted">Нажми, чтобы редактировать</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted text-center py-4">Пока нет заданий</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="panel-card p-3">
+        <div class="fw-bold mb-2">Редактирование задания</div>
+        <div class="text-muted small mb-3">Выбери задание слева</div>
+
+        <div id="editBlock" style="display:none;">
+          <div class="mb-2">
+            <label class="small-muted">Название</label>
+            <input class="form-control" id="eTitle">
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="small-muted">Минимальный балл</label>
+              <input class="form-control" id="eMin" type="number" step="0.5">
+            </div>
+            <div class="col">
+              <label class="small-muted">Максимальный балл</label>
+              <input class="form-control" id="eMax" type="number" step="0.5">
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="button" onclick="updatePractice()">
+              <i class="bi bi-save me-1"></i> Сохранить
+            </button>
+            <button class="btn btn-outline-danger" type="button" onclick="deletePractice()">
+              <i class="bi bi-trash me-1"></i> Удалить
+            </button>
+          </div>
+
+          <div class="small-muted mt-3">
+            Оценивание — внутри конкретной группы курса.
+          </div>
+        </div>
+
+        <div id="hintBlock" class="text-center text-muted py-5">
+          <i class="bi bi-clipboard2-check display-6 opacity-25"></i>
+          <div class="mt-2">Выбери задание слева, чтобы изменить параметры</div>
+        </div>
+      </div>
+
+      <div class="panel-card p-3 mt-3">
+        <div class="fw-bold mb-2">Группы курса</div>
+        {% if groups %}
+          <div class="small-muted mb-2">Оценивание находится внутри группы:</div>
+          <div class="d-flex flex-wrap gap-2">
+            {% for g in groups %}
+              <a class="badge bg-primary text-decoration-none"
+                 href="{{ url_for('course_group', course_id=course.id, group_id=g.id) }}">
+                {{ g.name }}
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-muted">У курса пока нет групп.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if update_available and update_url %}
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Доступна новая версия приложения.</p>
+        <div class="small text-muted">Текущая версия: <strong>{{ app_version }}</strong></div>
+        <div class="small text-muted">Новая версия: <strong>{{ update_remote_version }}</strong></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
+        <a class="btn btn-primary" href="{{ update_url }}" target="_blank" rel="noopener">Скачать</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if update_available and update_url %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const modalEl = document.getElementById('updateModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  });
+</script>
+{% endif %}
+
+<script>
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const COURSE_ID = Number(document.getElementById('page').dataset.courseId);
+  let activePracticeId = null;
+
+  function selectPractice(el) {
+    document.querySelectorAll('.practice-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+
+    activePracticeId = Number(el.dataset.id);
+
+    document.getElementById('hintBlock').style.display = 'none';
+    document.getElementById('editBlock').style.display = 'block';
+
+    document.getElementById('eTitle').value = el.dataset.title || '';
+    document.getElementById('eMin').value = el.dataset.min || '0';
+    document.getElementById('eMax').value = el.dataset.max || '10';
+  }
+
+  function createPractice() {
+    const title = (document.getElementById('pTitle').value || '').trim();
+    const min_score = document.getElementById('pMin').value;
+    const max_score = document.getElementById('pMax').value;
+
+    if (!title) { alert('Введите название задания'); return; }
+
+    fetch(`/api/course/${COURSE_ID}/practice_create`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({title, min_score, max_score})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { alert(d.error || 'Не удалось создать'); return; }
+
+      document.getElementById('pTitle').value = '';
+      const p = d.practice;
+
+      const list = document.getElementById('practiceList');
+      const item = document.createElement('div');
+      item.className = 'list-item practice-item';
+      item.dataset.id = p.id;
+      item.dataset.title = p.title;
+      item.dataset.min = p.min_score;
+      item.dataset.max = p.max_score;
+
+      item.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="fw-semibold text-truncate"></div>
+          <span class="badge-soft ms-2"></span>
+        </div>
+        <div class="small-muted">Нажми, чтобы редактировать</div>
+      `;
+      item.querySelector('.fw-semibold').textContent = p.title;
+      item.querySelector('.badge-soft').textContent = `${p.min_score}—${p.max_score}`;
+
+      item.addEventListener('click', () => selectPractice(item));
+      list.prepend(item);
+
+      const cnt = document.getElementById('practiceCount');
+      cnt.innerText = String(parseInt(cnt.innerText || '0', 10) + 1);
+
+      selectPractice(item);
+    })
+    .catch(() => alert('Ошибка сети'));
+  }
+
+  function updatePractice() {
+    if (!activePracticeId) return;
+
+    const title = (document.getElementById('eTitle').value || '').trim();
+    const min_score = document.getElementById('eMin').value;
+    const max_score = document.getElementById('eMax').value;
+
+    if (!title) { alert('Название не может быть пустым'); return; }
+
+    fetch(`/api/practice/${activePracticeId}/update`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({title, min_score, max_score})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { alert(d.error || 'Не удалось сохранить'); return; }
+
+      const el = document.querySelector(`.practice-item[data-id="${activePracticeId}"]`);
+      if (el) {
+        el.dataset.title = d.practice.title;
+        el.dataset.min = d.practice.min_score;
+        el.dataset.max = d.practice.max_score;
+
+        el.querySelector('.fw-semibold').textContent = d.practice.title;
+        el.querySelector('.badge-soft').textContent = `${d.practice.min_score}—${d.practice.max_score}`;
+      }
+    })
+    .catch(() => alert('Ошибка сети'));
+  }
+
+  function deletePractice() {
+    if (!activePracticeId) return;
+    if (!confirm('Удалить это задание? Оценки по нему тоже удалятся.')) return;
+
+    fetch(`/api/practice/${activePracticeId}/delete`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { alert(d.error || 'Не удалось удалить'); return; }
+
+      const el = document.querySelector(`.practice-item[data-id="${activePracticeId}"]`);
+      if (el) el.remove();
+
+      const cnt = document.getElementById('practiceCount');
+      cnt.innerText = String(Math.max(0, parseInt(cnt.innerText || '1', 10) - 1));
+
+      activePracticeId = null;
+      document.getElementById('editBlock').style.display = 'none';
+      document.getElementById('hintBlock').style.display = 'block';
+    })
+    .catch(() => alert('Ошибка сети'));
+  }
+</script>
+
+</body>
+</html>

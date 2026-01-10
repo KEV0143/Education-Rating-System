@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{{ course.title }} — Курс</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    body { background-color: #f8f9fa; color: #333; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    .card-course {
+      display: flex;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+      transition: 0.3s;
+      margin-bottom: 20px;
+      align-items: stretch;
+      border: 1px solid #eee;
+      height: 160px;
+      overflow: visible;
+      position: relative;
+    }
+    .card-course:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.08); transform: translateY(-2px); z-index: 10; }
+
+    .course-img-container {
+      width: 240px;
+      min-width: 240px;
+      background-color: #f1f3f5;
+      border-top-left-radius: 12px;
+      border-bottom-left-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    .course-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Иконка для карточек групп */
+    .group-icon-wrap{
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(13,110,253,0.22);
+    }
+    .group-icon-wrap i{
+      font-size: 56px;
+      line-height: 1;
+    }
+
+    .course-body {
+      flex-grow: 1;
+      padding: 15px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+    }
+
+    .group-badge {
+      font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;
+      background: #0d6efd; color: white; text-decoration: none;
+      display: inline-block; margin-right: 5px;
+    }
+
+    .meta-line{
+      font-size: 0.9rem;
+      color: #6c757d;
+      margin-top: 6px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .meta-line span i{ margin-right: 6px; }
+    .meta-strong{ color:#111; font-weight:600; }
+  </style>
+</head>
+<body>
+
+<div class="container py-5">
+
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <a href="/" class="btn btn-outline-secondary btn-sm mb-2">
+        <i class="bi bi-arrow-left"></i> Назад
+      </a>
+      <h2 class="m-0 fw-bold">{{ course.title }}</h2>
+      <div class="text-muted small mt-1">
+        <i class="bi bi-calendar"></i> {{ course.year }} &nbsp;|&nbsp;
+        <i class="bi bi-journal"></i> {{ course.semester }} семестр
+      </div>
+    </div>
+
+    <div class="ms-3">
+      <div class="d-flex gap-2 flex-wrap justify-content-end">
+        <a class="btn btn-primary d-inline-flex align-items-center"
+           href="{{ url_for('course_assessments', course_id=course.id) }}">
+          <i class="bi bi-clipboard-check me-2"></i>
+          <span>Задания и оценки</span>
+        </a>
+
+        <a class="btn btn-outline-success d-inline-flex align-items-center"
+           href="{{ url_for('course_export_excel', course_id=course.id) }}">
+          <i class="bi bi-file-earmark-excel me-2"></i>
+          <span>Выгрузка Excel</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Карточка курса сверху -->
+  <div class="card-course mb-4" style="cursor: default;">
+    <div class="course-img-container">
+      {% if course.image_filename == 'default.jpg' %}
+        <img src="/placeholder" class="course-img">
+      {% else %}
+        <img src="{{ url_for('static', filename='uploads/' + course.image_filename) }}" class="course-img" onerror="this.src='/placeholder'">
+      {% endif %}
+    </div>
+
+    <div class="course-body">
+      <div class="text-muted small mb-2">Группы курса</div>
+      <div style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+        {% for g_name in course.get_group_names() %}
+          <span class="group-badge">{{ g_name }}</span>
+        {% endfor %}
+        {% if not course.get_group_names() %}
+          <span class="text-muted">Группы не назначены</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Карточки групп -->
+  {% if groups %}
+    {% for g in groups %}
+      {% set sc = student_counts.get(g.id, 0) %}
+      {% set total_p = total_practices or 0 %}
+      {% set done_works = group_work_counts.get(g.id, 0) %}
+      {% set max_works = group_max_works.get(g.id, 0) %}
+      {% set sum_score = group_score_sums.get(g.id, 0) %}
+      {% set max_score = group_max_possible.get(g.id, 0) %}
+
+      <div class="card-course"
+           data-href="{{ url_for('course_group', course_id=course.id, group_id=g.id) }}"
+           style="cursor: pointer;">
+        <div class="course-img-container">
+          <div class="group-icon-wrap">
+            <i class="bi bi-people-fill"></i>
+          </div>
+        </div>
+
+        <div class="course-body">
+          <h4 class="fw-bold m-0 text-dark text-truncate" title="{{ g.name }}">{{ g.name }}</h4>
+
+          <div class="meta-line">
+            <span><i class="bi bi-people"></i>Студентов: <span class="meta-strong">{{ sc }}</span></span>
+            <span><i class="bi bi-journal-check"></i>Практик: <span class="meta-strong">{{ total_p }}</span></span>
+          </div>
+
+          <div class="meta-line">
+            <span><i class="bi bi-check2-square"></i>Работ: <span class="meta-strong">{{ done_works }}</span>{% if max_works %} / {{ max_works }}{% endif %}</span>
+            <span><i class="bi bi-award"></i>Баллы: <span class="meta-strong">{{ '%.2f'|format(sum_score) }}</span>{% if max_score %} / {{ '%.2f'|format(max_score) }}{% endif %}</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-collection display-4 opacity-25"></i>
+      <p class="mt-3">В этом курсе пока нет назначенных групп.</p>
+    </div>
+  {% endif %}
+
+</div>
+
+{% if update_available and update_url %}
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Доступна новая версия приложения.</p>
+        <div class="small text-muted">Текущая версия: <strong>{{ app_version }}</strong></div>
+        <div class="small text-muted">Новая версия: <strong>{{ update_remote_version }}</strong></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
+        <a class="btn btn-primary" href="{{ update_url }}" target="_blank" rel="noopener">Скачать</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if update_available and update_url %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const modalEl = document.getElementById('updateModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  });
+</script>
+{% endif %}
+
+<script>
+  document.querySelectorAll('.card-course[data-href]').forEach(card => {
+    card.addEventListener('click', () => {
+      window.location.href = card.dataset.href;
+    });
+  });
+</script>
+
+</body>
+</html>

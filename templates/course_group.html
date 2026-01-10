@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{{ course.title }} — {{ group.name }}</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    body { background-color: #f8f9fa; color: #333; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .panel-card { border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); border: 1px solid #eee; background: #fff; }
+    .student-scroll-area { height: 560px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 10px; background: #fff; }
+    .small-muted { font-size: .85rem; color: #6c757d; }
+
+    .practice-chip {
+      cursor: pointer;
+      border: 1px solid #dee2e6;
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 10px;
+      transition: .15s;
+      user-select: none;
+      min-width: 160px;
+    }
+    .practice-chip:hover { background: #f1f3f5; }
+
+    .practice-chip.active {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+      color: #111;
+    }
+    .chip-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chip-sub { font-size: .8rem; color: #6c757d; }
+
+    .save-indicator { font-size: .85rem; color: #6c757d; }
+    .save-indicator.saving { color: #0d6efd; }
+    .save-indicator.saved { color: #198754; }
+    .save-indicator.error { color: #dc3545; }
+
+    .student-name { cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div class="container py-5" id="page"
+     data-course-id="{{ course.id }}"
+     data-group-id="{{ group.id }}">
+
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm mb-2">
+        <i class="bi bi-arrow-left"></i> Назад к курсу
+      </a>
+      <h2 class="m-0 fw-bold">{{ group.name }}</h2>
+      <div class="text-muted small mt-1">
+        <span class="fw-semibold">{{ course.title }}</span> · {{ course.year }} · {{ course.semester }} семестр
+      </div>
+    </div>
+
+    <div class="ms-3">
+      <a class="btn btn-outline-primary"
+         href="{{ url_for('course_assessments', course_id=course.id) }}">
+        <i class="bi bi-clipboard2-check me-1"></i> Задания и баллы
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="panel-card p-3">
+        <div class="fw-bold mb-2">Задания</div>
+
+        {% if practices %}
+          <div class="d-flex flex-wrap gap-2" id="practiceChips">
+            {% for p in practices %}
+              <div class="practice-chip"
+                   data-id="{{ p.id }}"
+                   data-title="{{ p.title }}"
+                   data-min="{{ p.min_score }}"
+                   data-max="{{ p.max_score }}"
+                   onclick="selectPractice(this)">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="chip-title" title="{{ p.title }}">{{ p.title }}</div>
+                  <span class="badge bg-primary">{{ p.min_score }}–{{ p.max_score }}</span>
+                </div>
+                <div class="chip-sub">Нажми для оценивания</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-muted">Сначала создай задания в “Задания и баллы”.</div>
+        {% endif %}
+
+        <hr>
+
+        <div class="fw-semibold mb-2">Массово</div>
+        <input class="form-control mb-2" id="bulkScore" type="number" step="0.5" placeholder="Балл">
+        <input class="form-control mb-2" id="bulkComment" placeholder="Комментарий (необязательно)">
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary" type="button" onclick="applyBulkSelected()">
+            <i class="bi bi-check2-square me-1"></i> К выбранным
+          </button>
+          <button class="btn btn-primary" type="button" onclick="applyBulkAllGroup()">
+            <i class="bi bi-check2-all me-1"></i> Ко всем
+          </button>
+        </div>
+
+        <div class="small-muted mt-3">
+          Выделяй студентов галочками слева от ФИО.
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="panel-card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="fw-bold">Студенты</div>
+          <div class="save-indicator" id="globalSaveIndicator">—</div>
+        </div>
+
+        <!-- Поиск -->
+        <input class="form-control mb-2" id="studentSearch" placeholder="Поиск по ФИО..." oninput="filterStudents()">
+
+        <div class="student-scroll-area p-2" id="studentsArea">
+          <div class="text-center text-muted mt-5">Выберите задание</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Модалка статистики -->
+<div class="modal fade" id="studentStatsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="statsTitle">Статистика</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="statsBody">
+        <div class="text-center text-muted">Загрузка…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if update_available and update_url %}
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Доступна новая версия приложения.</p>
+        <div class="small text-muted">Текущая версия: <strong>{{ app_version }}</strong></div>
+        <div class="small text-muted">Новая версия: <strong>{{ update_remote_version }}</strong></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
+        <a class="btn btn-primary" href="{{ update_url }}" target="_blank" rel="noopener">Скачать</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if update_available and update_url %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const modalEl = document.getElementById('updateModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  });
+</script>
+{% endif %}
+
+<script>
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const pageEl = document.getElementById('page');
+  const COURSE_ID = Number(pageEl.dataset.courseId);
+  const GROUP_ID = Number(pageEl.dataset.groupId);
+
+  let activePracticeId = null;
+  let activePracticeMin = 0;
+  let activePracticeMax = 10;
+
+  const saveTimers = new Map();
+  const lastPayload = new Map();
+
+  function setGlobalIndicator(state, text) {
+    const el = document.getElementById('globalSaveIndicator');
+    el.classList.remove('saving','saved','error');
+    if (state) el.classList.add(state);
+    el.textContent = text || '—';
+  }
+
+  function selectPractice(el) {
+    document.querySelectorAll('.practice-chip').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+
+    activePracticeId = Number(el.dataset.id);
+    activePracticeMin = Number(el.dataset.min);
+    activePracticeMax = Number(el.dataset.max);
+
+    setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+    reloadGrades();
+  }
+
+  function reloadGrades() {
+    const area = document.getElementById('studentsArea');
+    if (!activePracticeId) {
+      area.innerHTML = '<div class="text-center text-muted mt-5">Выберите задание</div>';
+      return;
+    }
+
+    area.innerHTML = '<div class="text-center text-muted mt-5">Загрузка…</div>';
+
+    fetch(`/api/practice/${activePracticeId}/group/${GROUP_ID}/grades`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) { area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка</div>'; return; }
+
+        const rows = d.rows || [];
+        if (!rows.length) {
+          area.innerHTML = '<div class="text-center text-muted mt-5">В группе нет студентов</div>';
+          return;
+        }
+
+        const ul = document.createElement('ul');
+        ul.className = 'list-group list-group-flush';
+        ul.id = 'studentsUl';
+
+        rows.forEach((r, idx) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item student-row';
+          li.dataset.fio = (r.fio || '').toLowerCase();
+
+          const top = document.createElement('div');
+          top.className = 'd-flex justify-content-between align-items-center';
+
+          const left = document.createElement('div');
+          left.className = 'd-flex align-items-center gap-2';
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'form-check-input';
+          cb.dataset.sid = r.student_id;
+
+          const name = document.createElement('div');
+          name.className = 'fw-semibold student-name';
+          name.textContent = `${idx + 1}. ${r.fio}`;
+          name.title = 'Нажми, чтобы открыть статистику';
+          name.addEventListener('click', () => openStudentStats(r.student_id, r.fio));
+
+          left.appendChild(cb);
+          left.appendChild(name);
+
+          const right = document.createElement('div');
+          right.className = 'd-flex gap-2 align-items-center';
+
+          const score = document.createElement('input');
+          score.type = 'number';
+          score.step = '0.5';
+          score.min = String(activePracticeMin);
+          score.max = String(activePracticeMax);
+          score.className = 'form-control form-control-sm';
+          score.style.width = '120px';
+          score.placeholder = 'Балл';
+          score.value = (r.score === null || r.score === undefined) ? '' : r.score;
+
+          const comment = document.createElement('input');
+          comment.type = 'text';
+          comment.className = 'form-control form-control-sm';
+          comment.style.width = '320px';
+          comment.placeholder = 'Комментарий';
+          comment.value = r.comment || '';
+
+          // Автосохранение
+          score.addEventListener('input', () => queueAutoSave(r.student_id, score.value, comment.value));
+          comment.addEventListener('input', () => queueAutoSave(r.student_id, score.value, comment.value));
+          score.addEventListener('blur', () => flushAutoSave(r.student_id, score.value, comment.value));
+          comment.addEventListener('blur', () => flushAutoSave(r.student_id, score.value, comment.value));
+
+          right.appendChild(score);
+          right.appendChild(comment);
+
+          top.appendChild(left);
+          top.appendChild(right);
+
+          li.appendChild(top);
+          ul.appendChild(li);
+        });
+
+        area.innerHTML = '';
+        area.appendChild(ul);
+
+        document.getElementById('studentSearch').value = '';
+        setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+      })
+      .catch(() => area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка сети</div>');
+  }
+
+  function queueAutoSave(studentId, score, comment) {
+    if (!activePracticeId) return;
+
+    const key = Number(studentId);
+    const payloadKey = `${String(score ?? '')}|${String(comment ?? '')}`;
+
+    if (lastPayload.get(key) === payloadKey) return;
+
+    if (saveTimers.has(key)) clearTimeout(saveTimers.get(key));
+    setGlobalIndicator('saving', 'Сохранение…');
+
+    const t = setTimeout(() => {
+      flushAutoSave(key, score, comment);
+    }, 600);
+
+    saveTimers.set(key, t);
+  }
+
+  function flushAutoSave(studentId, score, comment) {
+    if (!activePracticeId) return;
+
+    const key = Number(studentId);
+    if (saveTimers.has(key)) {
+      clearTimeout(saveTimers.get(key));
+      saveTimers.delete(key);
+    }
+
+    const payloadKey = `${String(score ?? '')}|${String(comment ?? '')}`;
+    if (lastPayload.get(key) === payloadKey) return;
+
+    fetch(`/api/practice/${activePracticeId}/grade_one`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({student_id: key, score: score, comment: comment})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) {
+        setGlobalIndicator('error', d.error || 'Ошибка сохранения');
+        return;
+      }
+      lastPayload.set(key, payloadKey);
+      setGlobalIndicator('saved', 'Сохранено');
+      setTimeout(() => {
+        const el = document.getElementById('globalSaveIndicator');
+        if (el.classList.contains('saved')) setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+      }, 900);
+    })
+    .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
+  }
+
+  function applyBulkAllGroup() {
+    if (!activePracticeId) { alert('Сначала выберите задание'); return; }
+
+    const score = document.getElementById('bulkScore').value;
+    const comment = document.getElementById('bulkComment').value;
+
+    if (!confirm('Применить ко всем студентам этой группы?')) return;
+
+    setGlobalIndicator('saving', 'Применяем…');
+
+    fetch(`/api/practice/${activePracticeId}/grade_bulk_group`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({group_id: GROUP_ID, score: score, comment: comment})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { setGlobalIndicator('error', d.error || 'Ошибка'); return; }
+      reloadGrades();
+      setGlobalIndicator('saved', 'Применено');
+      setTimeout(() => setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`), 900);
+    })
+    .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
+  }
+
+  function applyBulkSelected() {
+    if (!activePracticeId) { alert('Сначала выберите задание'); return; }
+
+    const score = document.getElementById('bulkScore').value;
+    const comment = document.getElementById('bulkComment').value;
+
+    const ids = [];
+    document.querySelectorAll('#studentsArea input.form-check-input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) ids.push(parseInt(cb.dataset.sid, 10));
+    });
+
+    if (!ids.length) { alert('Выберите студентов галочками'); return; }
+
+    setGlobalIndicator('saving', 'Применяем…');
+
+    fetch(`/api/practice/${activePracticeId}/grade_bulk_students`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({student_ids: ids, score: score, comment: comment})
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { setGlobalIndicator('error', d.error || 'Ошибка'); return; }
+      reloadGrades();
+      setGlobalIndicator('saved', 'Применено');
+      setTimeout(() => setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`), 900);
+    })
+    .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
+  }
+
+  function filterStudents() {
+    const q = (document.getElementById('studentSearch').value || '').trim().toLowerCase();
+    document.querySelectorAll('.student-row').forEach(row => {
+      const fio = row.dataset.fio || '';
+      row.style.display = fio.includes(q) ? '' : 'none';
+    });
+  }
+
+  // Статистика студента
+  function openStudentStats(studentId, fio) {
+    const title = document.getElementById('statsTitle');
+    const body = document.getElementById('statsBody');
+    title.textContent = fio || 'Статистика';
+    body.innerHTML = '<div class="text-center text-muted">Загрузка…</div>';
+
+    fetch(`/api/course/${COURSE_ID}/student/${studentId}/stats`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          body.innerHTML = `<div class="text-danger">${d.error || 'Ошибка'}</div>`;
+          return;
+        }
+
+        body.innerHTML = `
+          <div class="mb-2"><span class="fw-semibold">Выполнено практик:</span> ${d.completed_practices} / ${d.total_practices}</div>
+          <div class="mb-2"><span class="fw-semibold">Баллы:</span> ${d.total_score} / ${d.max_possible}</div>
+          <div class="text-muted small">* “Выполнено” считается, если балл выставлен.</div>
+        `;
+      })
+      .catch(() => { body.innerHTML = `<div class="text-danger">Ошибка сети</div>`; });
+
+    new bootstrap.Modal(document.getElementById('studentStatsModal')).show();
+  }
+</script>
+
+</body>
+</html>
