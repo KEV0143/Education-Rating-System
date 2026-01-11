@@ -32,6 +32,8 @@ def init_practice_models(db):
 
         score = db.Column(db.Float, nullable=True)
         comment = db.Column(db.String(1000), nullable=False, default="")
+        score_updated_at = db.Column(db.DateTime, nullable=True)
+        comment_updated_at = db.Column(db.DateTime, nullable=True)
 
         updated_at = db.Column(db.DateTime, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 
@@ -46,6 +48,9 @@ def init_practice_models(db):
                 "student_id": self.student_id,
                 "score": self.score,
                 "comment": self.comment,
+                "score_updated_at": self.score_updated_at,
+                "comment_updated_at": self.comment_updated_at,
+                "updated_at": self.updated_at,
             }
 
     return Practice, PracticeGrade

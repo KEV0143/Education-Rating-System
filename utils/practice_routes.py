@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import render_template, request, jsonify, abort
 
 
@@ -36,6 +38,14 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         if len(c) > 1000:
             c = c[:1000]
         return c
+
+    def _dt_iso(dt):
+        if not dt:
+            return None
+        try:
+            return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception:
+            return None
 
     @app.get("/course/<int:course_id>/assessments")
     def course_assessments(course_id: int):
@@ -110,7 +120,7 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
     @app.post("/api/practice/<int:practice_id>/delete")
     def api_practice_delete(practice_id: int):
         p = _get_practice_or_404(practice_id)
-        db.session.delete(p)  # cascade -> grades
+        db.session.delete(p)
         db.session.commit()
         return jsonify({"success": True})
 
@@ -141,6 +151,9 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
                 "fio": s.fio,
                 "score": g.score if g else None,
                 "comment": g.comment if g else "",
+                "score_updated_at": _dt_iso(getattr(g, "score_updated_at", None)) if g else None,
+                "comment_updated_at": _dt_iso(getattr(g, "comment_updated_at", None)) if g else None,
+                "updated_at": _dt_iso(getattr(g, "updated_at", None)) if g else None,
             })
 
         return jsonify({"success": True, "rows": rows})
@@ -169,11 +182,31 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
             grade = PracticeGrade(practice_id=practice.id, student_id=student.id)
             db.session.add(grade)
 
+        now = datetime.utcnow()
+
+        old_score = grade.score
+        old_comment = grade.comment or ""
+        new_comment = comment or ""
+
+        score_changed = (old_score != score)
+        comment_changed = (old_comment != new_comment)
+
         grade.score = score
-        grade.comment = comment
+        grade.comment = new_comment
+
+        if score_changed:
+            grade.score_updated_at = now
+        if comment_changed:
+            grade.comment_updated_at = now
 
         db.session.commit()
-        return jsonify({"success": True})
+
+        return jsonify({
+            "success": True,
+            "score_updated_at": _dt_iso(getattr(grade, "score_updated_at", None)),
+            "comment_updated_at": _dt_iso(getattr(grade, "comment_updated_at", None)),
+            "updated_at": _dt_iso(getattr(grade, "updated_at", None)),
+        })
 
     @app.post("/api/practice/<int:practice_id>/grade_bulk_group")
     def api_grade_bulk_group(practice_id: int):
@@ -203,13 +236,24 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         gmap = {g.student_id: g for g in existing}
 
         updated = 0
+        now = datetime.utcnow()
         for sid in student_ids:
             g = gmap.get(sid)
             if not g:
                 g = PracticeGrade(practice_id=practice.id, student_id=sid)
                 db.session.add(g)
+
+            old_score = g.score
+            old_comment = g.comment or ""
+
             g.score = score
             g.comment = comment
+
+            if old_score != score:
+                g.score_updated_at = now
+            if old_comment != (comment or ""):
+                g.comment_updated_at = now
+
             updated += 1
 
         db.session.commit()
@@ -245,13 +289,24 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         gmap = {g.student_id: g for g in existing}
 
         updated = 0
+        now = datetime.utcnow()
         for sid in ok_ids:
             g = gmap.get(sid)
             if not g:
                 g = PracticeGrade(practice_id=practice.id, student_id=sid)
                 db.session.add(g)
+
+            old_score = g.score
+            old_comment = g.comment or ""
+
             g.score = score
             g.comment = comment
+
+            if old_score != score:
+                g.score_updated_at = now
+            if old_comment != (comment or ""):
+                g.comment_updated_at = now
+
             updated += 1
 
         db.session.commit()
@@ -292,11 +347,20 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
 
         completed = 0
         total_score = 0.0
+        last_score_update = None
+        last_comment_update = None
         for p in practices:
             g = grade_map.get(p.id)
             if g and g.score is not None:
                 completed += 1
                 total_score += float(g.score)
+
+            su = getattr(g, "score_updated_at", None) if g else None
+            cu = getattr(g, "comment_updated_at", None) if g else None
+            if su and (not last_score_update or su > last_score_update):
+                last_score_update = su
+            if cu and (not last_comment_update or cu > last_comment_update):
+                last_comment_update = cu
 
         def nice(x):
             if abs(x - round(x)) < 1e-9:
@@ -307,6 +371,10 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
             "success": True,
             "total_practices": total_practices,
             "completed_practices": completed,
+            "missing_practices": max(0, total_practices - completed),
             "total_score": nice(total_score),
             "max_possible": nice(max_possible)
+            ,
+            "last_score_updated_at": _dt_iso(last_score_update),
+            "last_comment_updated_at": _dt_iso(last_comment_update),
         })

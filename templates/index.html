@@ -5,6 +5,14 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <meta name="greeting-name" content="{{ greeting_name|default('', true)|e }}">
     <title>Рейтинговая система</title>
+
+    <script>
+      (() => {
+        const saved = localStorage.getItem('rs-theme');
+        const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+    </script>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
@@ -13,25 +21,48 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
 
     <style>
-        body { background-color: #f8f9fa; color: #333; font-family: 'Segoe UI', system-ui, sans-serif; }
+        :root{
+            --rs-page-bg: #f8f9fa;
+            --rs-text: #333;
+            --rs-card-bg: #ffffff;
+            --rs-border: #eee;
+            --rs-soft-border: #dee2e6;
+            --rs-img-bg: #f1f3f5;
+            --rs-shadow: rgba(0,0,0,0.03);
+            --rs-shadow-hover: rgba(0,0,0,0.08);
+            --rs-hover-bg: #f1f3f5;
+        }
+        :root[data-bs-theme="dark"]{
+            --rs-page-bg: #0f1216;
+            --rs-text: #e9ecef;
+            --rs-card-bg: #151a21;
+            --rs-border: rgba(255,255,255,0.08);
+            --rs-soft-border: rgba(255,255,255,0.14);
+            --rs-img-bg: #0e1116;
+            --rs-shadow: rgba(0,0,0,0.35);
+            --rs-shadow-hover: rgba(0,0,0,0.55);
+            --rs-hover-bg: rgba(255,255,255,0.06);
+        }
+
+        body { background-color: var(--rs-page-bg); color: var(--rs-text); font-family: 'Segoe UI', system-ui, sans-serif; }
         .card-course {
             display: flex;
-            background: white;
+            background: var(--rs-card-bg);
             border-radius: 12px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            box-shadow: 0 2px 5px var(--rs-shadow);
             transition: 0.3s;
             margin-bottom: 20px;
             align-items: stretch;
-            border: 1px solid #eee;
+            border: 1px solid var(--rs-border);
             height: 160px;
             overflow: visible;
             position: relative;
         }
-        .card-course:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.08); transform: translateY(-2px); z-index: 10; }
+        .card-course:hover { box-shadow: 0 8px 20px var(--rs-shadow-hover); transform: translateY(-2px); z-index: 10; }
         .course-img-container {
             width: 240px;
             min-width: 240px;
-            background-color: #f1f3f5;
+            background-color: var(--rs-img-bg);
             border-top-left-radius: 12px;
             border-bottom-left-radius: 12px;
             overflow: hidden;
@@ -54,21 +85,44 @@
         }
 
         .filter-btn {
-            background-color: #fff; border: 1px solid #dee2e6; color: #495057;
+            background-color: var(--rs-card-bg); border: 1px solid var(--rs-soft-border); color: var(--rs-text);
             text-align: left; display: flex; justify-content: space-between; align-items: center;
         }
         .filter-btn:hover, .filter-btn:focus, .filter-btn:active {
-            background-color: #fff; border-color: #86b7fe; color: #495057;
+            background-color: var(--rs-card-bg); border-color: #86b7fe; color: var(--rs-text);
             box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25);
         }
         .dropdown-menu-scroll { max-height: 250px; overflow-y: auto; }
         .filter-search-input { margin: 5px 10px; width: auto; }
 
-        .group-list-item { cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: 0.2s; border-bottom: 1px solid #f8f9fa;}
-        .group-list-item:hover { background-color: #f1f3f5; }
+        .group-list-item { cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: 0.2s; border-bottom: 1px solid rgba(0,0,0,0.04);}
+        :root[data-bs-theme="dark"] .group-list-item { border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .group-list-item:hover { background-color: var(--rs-hover-bg); }
         .group-list-item.active { background-color: #0d6efd; color: white; }
-        .student-scroll-area { height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; background: #fff; }
-        .checkbox-list-container { max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; }
+
+        /* Кнопка удаления группы — показываем аккуратно только при наведении/активной группе */
+        .group-del-btn{
+            opacity: 0;
+            padding: 0;
+            line-height: 1;
+            transition: opacity .15s;
+        }
+        .group-list-item:hover .group-del-btn,
+        .group-list-item.active .group-del-btn{
+            opacity: 1;
+        }
+        .student-scroll-area { height: 400px; overflow-y: auto; border: 1px solid var(--rs-soft-border); border-radius: 6px; background: var(--rs-card-bg); }
+        .checkbox-list-container { max-height: 200px; overflow-y: auto; border: 1px solid var(--rs-soft-border); border-radius: 6px; padding: 10px; }
+
+        :root[data-bs-theme="dark"] .reason-badge{
+            background-color: rgba(99,102,241,0.18);
+            border-color: rgba(99,102,241,0.35);
+            color: #c7d2fe;
+        }
+
+        :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
+        :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
+        :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
     </style>
 </head>
 <body>
@@ -78,8 +132,16 @@
         <h2 class="m-0 fw-bold" id="greetingTitle">
           Здравствуйте{% if greeting_name %}, {{ greeting_name }}{% endif %}! 👋
         </h2>
-        <div>
-            <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#studentsModal">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
+                <i class="bi bi-sun"></i>
+            </button>
+
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#archiveModal">
+                <i class="bi bi-archive"></i> Архив
+            </button>
+
+            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#studentsModal">
                 <i class="bi bi-people-fill"></i> База студентов
             </button>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#manageModal" onclick="prepareCreateCourseUX()">
@@ -93,6 +155,7 @@
             <input type="hidden" name="year" id="inputYear" value="{{ selected_year or '' }}">
             <input type="hidden" name="semester" id="inputSemester" value="{{ selected_sem or '' }}">
             <input type="hidden" name="group_id" id="inputGroupId" value="{{ selected_group_id or '' }}">
+            <input type="hidden" name="sort" id="inputSort" value="{{ selected_sort or 'title_asc' }}">
 
             <div class="input-group mb-3">
                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
@@ -151,6 +214,24 @@
                     </div>
                 </div>
 
+                <div class="col-md-4">
+                    <div class="dropdown">
+                        <button class="btn filter-btn w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="labelSort">{{ sort_label }}</span>
+                        </button>
+                        <div class="dropdown-menu w-100 dropdown-menu-scroll">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','title_asc')">Название (А–Я)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','title_desc')">Название (Я–А)</a>
+                            <hr class="dropdown-divider">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','year_desc')">Год (новые)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','year_asc')">Год (старые)</a>
+                            <hr class="dropdown-divider">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','semester_desc')">Семестр (убыв.)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','semester_asc')">Семестр (возр.)</a>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             {% endif %}
         </form>
@@ -178,7 +259,7 @@
                         {% endif %}
 
                         <div class="d-flex justify-content-between align-items-start mb-1">
-                            <h4 class="fw-bold m-0 text-dark text-truncate" title="{{ course.title }}">{{ course.title }}</h4>
+                            <h4 class="fw-bold m-0 text-body text-truncate" title="{{ course.title }}">{{ course.title }}</h4>
 
                             <div class="dropdown ms-2">
                                 <button class="btn btn-light btn-sm rounded-circle" type="button" data-bs-toggle="dropdown">
@@ -195,6 +276,14 @@
                                            onclick="openEditModal(this)">
                                            <i class="bi bi-pencil-fill me-2 text-primary"></i>Редактировать
                                         </a>
+                                    </li>
+                                    <li>
+                                        <form action="/archive_course/{{ course.id }}" method="POST" onsubmit="return confirm('Переместить курс в архив?')" class="m-0 p-0">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-archive-fill me-2 text-secondary"></i>В архив
+                                            </button>
+                                        </form>
                                     </li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
@@ -337,6 +426,57 @@
     </div>
 </div>
 
+<!-- Архив курсов -->
+<div class="modal fade" id="archiveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-archive me-2"></i>Архив курсов</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if archived_courses %}
+                    <div class="list-group">
+                        {% for c in archived_courses %}
+                            <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                                <div class="me-auto">
+                                    <div class="fw-semibold text-body">{{ c.title }}</div>
+                                    <div class="text-muted small mt-1">
+                                        <i class="bi bi-calendar"></i> {{ c.year }} &nbsp;|&nbsp;
+                                        <i class="bi bi-journal"></i> {{ c.semester }} семестр
+                                    </div>
+                                    <div class="mt-2" style="overflow:hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                        {% for g_name in c.get_group_names() %}
+                                            <span class="group-badge">{{ g_name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('course_detail', course_id=c.id) }}" title="Открыть курс">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                    <form action="/unarchive_course/{{ c.id }}" method="POST" class="m-0">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Вернуть
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-archive display-6 opacity-25"></i>
+                        <div class="mt-2">Архив пуст</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- База студентов -->
 <div class="modal fade" id="studentsModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
@@ -351,9 +491,6 @@
                     <div class="col-md-3 border-end bg-light p-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="text-muted small fw-bold m-0">Группы</h6>
-                            <button class="btn btn-sm btn-outline-danger" id="deleteGroupBtn" style="display:none;" onclick="deleteActiveGroup()">
-                                <i class="bi bi-trash3"></i>
-                            </button>
                         </div>
 
                         <div class="input-group mb-3">
@@ -364,7 +501,13 @@
                         <div style="height: 400px; overflow-y: auto;">
                             <div id="groupsListContainer">
                                 {% for g in groups %}
-                                <div class="group-list-item" data-id="{{ g.id }}" data-name="{{ g.name }}" onclick="selectGroup(this)">{{ g.name }}</div>
+                                <div class="group-list-item d-flex justify-content-between align-items-center" data-id="{{ g.id }}" data-name="{{ g.name }}" onclick="selectGroup(this)">
+                                    <span class="group-name text-truncate">{{ g.name }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none group-del-btn" title="Удалить группу"
+                                            onclick="event.stopPropagation(); deleteGroupFromBtn(this);">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </div>
                                 {% endfor %}
                             </div>
                         </div>
@@ -433,27 +576,32 @@
 
 {% if update_available and update_url %}
 <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="updateModalLabel">Доступно обновление</h5>
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление версии {{ update_remote_version.lstrip('vV') }}🎉</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <p class="mb-2">Доступна новая версия приложения.</p>
-        <div class="small text-muted">Текущая версия: <strong>{{ app_version }}</strong></div>
-        <div class="small text-muted">Новая версия: <strong>{{ update_remote_version }}</strong></div>
+        <div class="text-muted small">Текущая версия: <strong>{{ app_version.lstrip('vV') }}</strong></div>
+        <div class="text-muted small">Новая версия: <strong>{{ update_remote_version.lstrip('vV') }}</strong></div>
+
+        {% if update_notes %}
+        <div class="mt-3">
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="toggleNotesBtn" aria-expanded="false">Прочитать изменения</button>
+          <div class="mt-2 border rounded p-2 bg-light" id="updateNotes" style="display:none; white-space: pre-wrap; max-height: 260px; overflow:auto;">{{ update_notes }}</div>
+        </div>
+        {% endif %}
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
-        <a class="btn btn-primary" href="{{ update_url }}" target="_blank" rel="noopener">Скачать</a>
+        <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-download-url="{{ update_url }}" data-release-url="{{ update_release_url|default('', true) }}">Скачать</button>
       </div>
     </div>
   </div>
 </div>
 {% endif %}
-
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 {% if update_available and update_url %}
@@ -464,10 +612,30 @@
       const modal = new bootstrap.Modal(modalEl);
       modal.show();
     }
+
+    const btn = document.getElementById('downloadUpdateBtn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const dl = btn.dataset.downloadUrl;
+        const rel = btn.dataset.releaseUrl;
+        if (dl) window.open(dl, '_blank');
+        if (rel) window.location.href = rel;
+      });
+    }
+
+    const notesBtn = document.getElementById('toggleNotesBtn');
+    const notes = document.getElementById('updateNotes');
+    if (notesBtn && notes) {
+      notesBtn.addEventListener('click', () => {
+        const isHidden = notes.style.display === 'none' || !notes.style.display;
+        notes.style.display = isHidden ? 'block' : 'none';
+        notesBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        notesBtn.textContent = isHidden ? 'Скрыть изменения' : 'Прочитать изменения';
+      });
+    }
   });
 </script>
 {% endif %}
-
 <script>
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
@@ -550,6 +718,7 @@
     if (type === 'year') document.getElementById('inputYear').value = value;
     if (type === 'semester') document.getElementById('inputSemester').value = value;
     if (type === 'group_id') document.getElementById('inputGroupId').value = value;
+    if (type === 'sort') document.getElementById('inputSort').value = value;
     document.getElementById('filterForm').submit();
   }
 
@@ -682,7 +851,12 @@
 
   function renameGroupEverywhere(groupId, newName) {
     const item = document.querySelector(`.group-list-item[data-id="${groupId}"]`);
-    if (item) { item.dataset.name = newName; item.textContent = newName; }
+    if (item) {
+      item.dataset.name = newName;
+      const nameEl = item.querySelector('.group-name');
+      if (nameEl) nameEl.textContent = newName;
+      else item.textContent = newName;
+    }
 
     const cLabel = document.querySelector(`label[for="c_chk${groupId}"]`);
     if (cLabel) cLabel.textContent = newName;
@@ -739,11 +913,27 @@
         const g = d.group;
         const container = document.getElementById('groupsListContainer');
         const div = document.createElement('div');
-        div.className = 'group-list-item';
+        div.className = 'group-list-item d-flex justify-content-between align-items-center';
         div.dataset.id = g.id;
         div.dataset.name = g.name;
-        div.textContent = g.name;
         div.addEventListener('click', () => selectGroup(div));
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'group-name text-truncate';
+        nameSpan.textContent = g.name;
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-sm btn-link text-danger text-decoration-none group-del-btn';
+        delBtn.title = 'Удалить группу';
+        delBtn.innerHTML = '<i class="bi bi-trash3"></i>';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteGroupById(String(g.id), g.name);
+        });
+
+        div.appendChild(nameSpan);
+        div.appendChild(delBtn);
         container.appendChild(div);
         addGroupToCourseLists(g);
         selectGroup(div);
@@ -762,9 +952,47 @@
     document.getElementById('renameGroupInput').value = activeGroupName;
     document.getElementById('actionBlock').style.display = 'block';
 
-    document.getElementById('deleteGroupBtn').style.display = 'inline-block';
-
     loadStudents(activeGroupId);
+  }
+
+  function deleteGroupFromBtn(btn) {
+    const item = btn && btn.closest ? btn.closest('.group-list-item') : null;
+    if (!item) return;
+    deleteGroupById(item.dataset.id, item.dataset.name);
+  }
+
+  function deleteGroupById(groupId, groupName) {
+    if (!groupId) return;
+
+    const name = groupName || 'группа';
+    const msg =
+      `Удалить группу "${name}" полностью?\n\n` +
+      `Будут удалены все студенты этой группы и группа будет убрана из курсов.`;
+
+    if (!confirm(msg)) return;
+
+    fetch('/api/delete_group/' + groupId, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          alert(d.error || 'Не удалось удалить группу');
+          return;
+        }
+
+        removeGroupEverywhere(groupId);
+
+        if (String(activeGroupId) === String(groupId)) {
+          activeGroupId = null;
+          activeGroupName = null;
+          document.getElementById('currentGroupTitle').innerText = '--';
+          document.getElementById('studentsListArea').innerHTML = '<p class="text-center text-muted mt-5">Выберите группу</p>';
+          document.getElementById('actionBlock').style.display = 'none';
+        }
+      })
+      .catch(() => alert('Ошибка сети при удалении группы'));
   }
 
   function deleteStudent(studentId) {
@@ -806,17 +1034,42 @@
           const li = document.createElement('li');
           li.className = 'list-group-item d-flex justify-content-between align-items-center';
 
+          const left = document.createElement('div');
+          left.className = 'd-flex align-items-center gap-2 flex-grow-1';
+
           const span = document.createElement('span');
+          span.className = 'text-truncate';
           span.textContent = `${idx + 1}. ${s.fio}`;
+          left.appendChild(span);
 
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'btn btn-sm btn-link text-danger text-decoration-none';
-          btn.textContent = '✕';
-          btn.addEventListener('click', () => deleteStudent(s.id));
+          const actions = document.createElement('div');
+          actions.className = 'd-flex align-items-center gap-2';
 
-          li.appendChild(span);
-          li.appendChild(btn);
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn btn-sm btn-link text-primary text-decoration-none';
+          editBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+          editBtn.title = 'Редактировать ФИО';
+          editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startEditStudent(li, s.id, s.fio, idx + 1);
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'btn btn-sm btn-link text-danger text-decoration-none';
+          delBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+          delBtn.title = 'Удалить студента';
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteStudent(s.id);
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+
+          li.appendChild(left);
+          li.appendChild(actions);
           ul.appendChild(li);
         });
 
@@ -825,6 +1078,93 @@
       .catch(() => {
         area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка загрузки</div>';
       });
+  }
+
+  function startEditStudent(li, studentId, fio, num) {
+    if (!activeGroupId) return;
+
+    li.innerHTML = '';
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+    const left = document.createElement('div');
+    left.className = 'd-flex align-items-center gap-2 flex-grow-1';
+
+    const numSpan = document.createElement('span');
+    numSpan.className = 'text-muted';
+    numSpan.textContent = `${num}.`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm';
+    input.value = (fio || '').trim();
+    input.maxLength = 150;
+
+    left.appendChild(numSpan);
+    left.appendChild(input);
+
+    const actions = document.createElement('div');
+    actions.className = 'd-flex align-items-center gap-2';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-success';
+    saveBtn.innerHTML = '<i class="bi bi-check2"></i>';
+    saveBtn.title = 'Сохранить';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-sm btn-outline-secondary';
+    cancelBtn.innerHTML = '<i class="bi bi-x"></i>';
+    cancelBtn.title = 'Отмена';
+
+    saveBtn.addEventListener('click', () => commitEditStudent(studentId, input.value));
+    cancelBtn.addEventListener('click', () => loadStudents(activeGroupId));
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEditStudent(studentId, input.value);
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        loadStudents(activeGroupId);
+      }
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+
+    li.appendChild(left);
+    li.appendChild(actions);
+
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  async function commitEditStudent(studentId, fio) {
+    const n = (fio || '').trim();
+    if (!n) { alert('Введите ФИО'); return; }
+
+    try {
+      const r = await fetch('/api/update_student/' + studentId, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({ fio: n })
+      });
+      const d = await r.json();
+      if (!d || !d.success) {
+        alert((d && d.error) ? d.error : 'Не удалось сохранить');
+        return;
+      }
+      loadStudents(activeGroupId);
+    } catch (e) {
+      alert('Ошибка сети при сохранении');
+    }
   }
 
   function renameGroup() {
@@ -878,35 +1218,7 @@
 
   function deleteActiveGroup() {
     if (!activeGroupId) return;
-
-    const msg =
-      `Удалить группу "${activeGroupName}" полностью?\n\n` +
-      `Будут удалены все студенты этой группы и группа будет убрана из курсов.`;
-
-    if (!confirm(msg)) return;
-
-    fetch('/api/delete_group/' + activeGroupId, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': CSRF_TOKEN }
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (!d.success) {
-          alert(d.error || 'Не удалось удалить группу');
-          return;
-        }
-
-        removeGroupEverywhere(activeGroupId);
-
-        activeGroupId = null;
-        activeGroupName = null;
-
-        document.getElementById('currentGroupTitle').innerText = '--';
-        document.getElementById('studentsListArea').innerHTML = '<p class="text-center text-muted mt-5">Выберите группу</p>';
-        document.getElementById('actionBlock').style.display = 'none';
-        document.getElementById('deleteGroupBtn').style.display = 'none';
-      })
-      .catch(() => alert('Ошибка сети при удалении группы'));
+    deleteGroupById(activeGroupId, activeGroupName);
   }
 
   function wireCourseCardLinks() {
@@ -926,10 +1238,40 @@
     });
   }
 
+  function updateThemeToggleButton() {
+    const btn = document.getElementById('themeToggleBtn');
+    if (!btn) return;
+    const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+    const icon = btn.querySelector('i');
+    if (!icon) return;
+
+    if (theme === 'dark') {
+      icon.className = 'bi bi-moon-stars';
+      btn.title = 'Тёмная тема';
+    } else {
+      icon.className = 'bi bi-sun';
+      btn.title = 'Светлая тема';
+    }
+  }
+
+  function initThemeToggle() {
+    const btn = document.getElementById('themeToggleBtn');
+    if (!btn) return;
+    updateThemeToggleButton();
+    btn.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      const next = (cur === 'dark') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-bs-theme', next);
+      localStorage.setItem('rs-theme', next);
+      updateThemeToggleButton();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     wireCourseCardLinks();
     updateCreateGroupsCount();
     ensureGreetingName();
+    initThemeToggle();
   });
 </script>
 

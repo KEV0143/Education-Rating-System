@@ -5,6 +5,14 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{{ course.title }} — Курс</title>
 
+  <script>
+    (() => {
+      const saved = localStorage.getItem('rs-theme');
+      const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 
@@ -12,27 +20,52 @@
   <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
 
   <style>
-    body { background-color: #f8f9fa; color: #333; font-family: 'Segoe UI', system-ui, sans-serif; }
+    :root{
+      --rs-page-bg: #f8f9fa;
+      --rs-text: #333;
+      --rs-card-bg: #ffffff;
+      --rs-border: #eee;
+      --rs-soft-border: #dee2e6;
+      --rs-img-bg: #f1f3f5;
+      --rs-shadow: rgba(0,0,0,0.03);
+      --rs-shadow-hover: rgba(0,0,0,0.08);
+      --rs-hover-bg: #f1f3f5;
+      --rs-muted: #6c757d;
+    }
+    :root[data-bs-theme="dark"]{
+      --rs-page-bg: #0f1216;
+      --rs-text: #e9ecef;
+      --rs-card-bg: #151a21;
+      --rs-border: rgba(255,255,255,0.08);
+      --rs-soft-border: rgba(255,255,255,0.14);
+      --rs-img-bg: #0e1116;
+      --rs-shadow: rgba(0,0,0,0.35);
+      --rs-shadow-hover: rgba(0,0,0,0.55);
+      --rs-hover-bg: rgba(255,255,255,0.06);
+      --rs-muted: rgba(255,255,255,0.65);
+    }
+
+    body { background-color: var(--rs-page-bg); color: var(--rs-text); font-family: 'Segoe UI', system-ui, sans-serif; }
 
     .card-course {
       display: flex;
-      background: white;
+      background: var(--rs-card-bg);
       border-radius: 12px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+      box-shadow: 0 2px 5px var(--rs-shadow);
       transition: 0.3s;
       margin-bottom: 20px;
       align-items: stretch;
-      border: 1px solid #eee;
+      border: 1px solid var(--rs-border);
       height: 160px;
       overflow: visible;
       position: relative;
     }
-    .card-course:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.08); transform: translateY(-2px); z-index: 10; }
+    .card-course:hover { box-shadow: 0 8px 20px var(--rs-shadow-hover); transform: translateY(-2px); z-index: 10; }
 
     .course-img-container {
       width: 240px;
       min-width: 240px;
-      background-color: #f1f3f5;
+      background-color: var(--rs-img-bg);
       border-top-left-radius: 12px;
       border-bottom-left-radius: 12px;
       overflow: hidden;
@@ -71,14 +104,53 @@
 
     .meta-line{
       font-size: 0.9rem;
-      color: #6c757d;
+      color: var(--rs-muted);
       margin-top: 6px;
       display: flex;
       gap: 14px;
       flex-wrap: wrap;
     }
     .meta-line span i{ margin-right: 6px; }
-    .meta-strong{ color:#111; font-weight:600; }
+    .meta-strong{ color: var(--rs-text); font-weight:600; }
+
+    .donut {
+      --p: 0;
+      --size: 62px;
+      --thickness: 10px;
+      --c: var(--bs-success);
+      --bg: var(--bs-secondary-bg);
+      width: var(--size);
+      height: var(--size);
+      border-radius: 50%;
+      background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--bg) 0);
+      position: relative;
+      flex: 0 0 auto;
+      margin: 0 auto;
+    }
+    .donut::after{
+      content: '';
+      position: absolute;
+      inset: var(--thickness);
+      background: var(--rs-card-bg);
+      border-radius: 50%;
+    }
+    .donut-text{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--rs-text);
+      z-index: 1;
+      user-select: none;
+    }
+
+    :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
   </style>
 </head>
 <body>
@@ -90,7 +162,11 @@
       <a href="/" class="btn btn-outline-secondary btn-sm mb-2">
         <i class="bi bi-arrow-left"></i> Назад
       </a>
-      <h2 class="m-0 fw-bold">{{ course.title }}</h2>
+      <h2 class="m-0 fw-bold">{{ course.title }}
+        {% if course.archived %}
+          <span class="badge bg-secondary ms-2 align-middle">Архив</span>
+        {% endif %}
+      </h2>
       <div class="text-muted small mt-1">
         <i class="bi bi-calendar"></i> {{ course.year }} &nbsp;|&nbsp;
         <i class="bi bi-journal"></i> {{ course.semester }} семестр
@@ -99,17 +175,20 @@
 
     <div class="ms-3">
       <div class="d-flex gap-2 flex-wrap justify-content-end">
+        <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
+          <i class="bi bi-sun"></i>
+        </button>
         <a class="btn btn-primary d-inline-flex align-items-center"
            href="{{ url_for('course_assessments', course_id=course.id) }}">
           <i class="bi bi-clipboard-check me-2"></i>
           <span>Задания и оценки</span>
         </a>
 
-        <a class="btn btn-outline-success d-inline-flex align-items-center"
-           href="{{ url_for('course_export_excel', course_id=course.id) }}">
+        <button class="btn btn-outline-success d-inline-flex align-items-center"
+           type="button" data-bs-toggle="modal" data-bs-target="#exportExcelModal">
           <i class="bi bi-file-earmark-excel me-2"></i>
           <span>Выгрузка Excel</span>
-        </a>
+        </button>
       </div>
     </div>
   </div>
@@ -157,16 +236,37 @@
         </div>
 
         <div class="course-body">
-          <h4 class="fw-bold m-0 text-dark text-truncate" title="{{ g.name }}">{{ g.name }}</h4>
+          {% set _perc = ( (done_works * 100 / max_works) if max_works else 0 ) %}
+          {% set _perc_int = _perc|round(0)|int %}
+          {% set _missing = (max_works - done_works) if max_works else 0 %}
 
-          <div class="meta-line">
-            <span><i class="bi bi-people"></i>Студентов: <span class="meta-strong">{{ sc }}</span></span>
-            <span><i class="bi bi-journal-check"></i>Практик: <span class="meta-strong">{{ total_p }}</span></span>
-          </div>
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div class="flex-grow-1" style="min-width: 0;">
+              <h4 class="fw-bold m-0 text-body text-truncate" title="{{ g.name }}">{{ g.name }}</h4>
 
-          <div class="meta-line">
-            <span><i class="bi bi-check2-square"></i>Работ: <span class="meta-strong">{{ done_works }}</span>{% if max_works %} / {{ max_works }}{% endif %}</span>
-            <span><i class="bi bi-award"></i>Баллы: <span class="meta-strong">{{ '%.2f'|format(sum_score) }}</span>{% if max_score %} / {{ '%.2f'|format(max_score) }}{% endif %}</span>
+              <div class="meta-line">
+                <span><i class="bi bi-people"></i>Студентов: <span class="meta-strong">{{ sc }}</span></span>
+                <span><i class="bi bi-journal-check"></i>Практик: <span class="meta-strong">{{ total_p }}</span></span>
+              </div>
+
+              <div class="meta-line">
+                <span><i class="bi bi-check2-square"></i>Работ: <span class="meta-strong">{{ done_works }}</span>{% if max_works %} / {{ max_works }}{% endif %}</span>
+                <span><i class="bi bi-award"></i>Баллы: <span class="meta-strong">{{ '%.2f'|format(sum_score) }}</span>{% if max_score %} / {{ '%.2f'|format(max_score) }}{% endif %}</span>
+              </div>
+            </div>
+
+            <div class="text-center" style="min-width: 84px;">
+              <div class="donut" style="--p: {{ _perc_int }};" title="Сдано: {{ done_works }}{% if max_works %} / {{ max_works }}{% endif %}. Не сдано: {{ _missing }}">
+                <div class="donut-text">{{ _perc_int }}%</div>
+              </div>
+              <div class="small text-muted mt-1">
+                {% if max_works %}
+                  {{ done_works }} / {{ max_works }}
+                {% else %}
+                  нет работ
+                {% endif %}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -180,28 +280,86 @@
 
 </div>
 
-{% if update_available and update_url %}
-<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+<!-- Выгрузка Excel: выбор групп -->
+<div class="modal fade" id="exportExcelModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="updateModalLabel">Доступно обновление</h5>
+        <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>Выгрузка Excel</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% if groups %}
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div class="text-muted small">Выберите группы для выгрузки</div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary" type="button" onclick="setAllExportGroups(true)">
+                <i class="bi bi-check2-square me-1"></i>Выбрать всё
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" type="button" onclick="setAllExportGroups(false)">
+                <i class="bi bi-square me-1"></i>Убрать всё
+              </button>
+            </div>
+          </div>
+
+          <div class="border rounded p-2" style="background: var(--rs-card-bg);">
+            {% for g in groups %}
+              <div class="form-check">
+                <input class="form-check-input export-group-cb" type="checkbox" value="{{ g.id }}" id="exp_g{{ g.id }}" checked>
+                <label class="form-check-label" for="exp_g{{ g.id }}">{{ g.name }}</label>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="small text-muted" id="exportSelectedCount"></div>
+            <div class="small text-muted">Файл формируется в .xlsx</div>
+          </div>
+        {% else %}
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-collection display-6 opacity-25"></i>
+            <div class="mt-2">В курсе нет групп для выгрузки</div>
+          </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-success" type="button" onclick="downloadExcelSelected()" {% if not groups %}disabled{% endif %}>
+          <i class="bi bi-download me-1"></i>Скачать
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if update_available and update_url %}
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление версии {{ update_remote_version.lstrip('vV') }}🎉</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <p class="mb-2">Доступна новая версия приложения.</p>
-        <div class="small text-muted">Текущая версия: <strong>{{ app_version }}</strong></div>
-        <div class="small text-muted">Новая версия: <strong>{{ update_remote_version }}</strong></div>
+        <div class="text-muted small">Текущая версия: <strong>{{ app_version.lstrip('vV') }}</strong></div>
+        <div class="text-muted small">Новая версия: <strong>{{ update_remote_version.lstrip('vV') }}</strong></div>
+
+        {% if update_notes %}
+        <div class="mt-3">
+          <button class="btn btn-outline-secondary btn-sm" type="button" id="toggleNotesBtn" aria-expanded="false">Прочитать изменения</button>
+          <div class="mt-2 border rounded p-2 bg-light" id="updateNotes" style="display:none; white-space: pre-wrap; max-height: 260px; overflow:auto;">{{ update_notes }}</div>
+        </div>
+        {% endif %}
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
-        <a class="btn btn-primary" href="{{ update_url }}" target="_blank" rel="noopener">Скачать</a>
+        <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-download-url="{{ update_url }}" data-release-url="{{ update_release_url|default('', true) }}">Скачать</button>
       </div>
     </div>
   </div>
 </div>
 {% endif %}
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 {% if update_available and update_url %}
@@ -212,15 +370,109 @@
       const modal = new bootstrap.Modal(modalEl);
       modal.show();
     }
+
+    const btn = document.getElementById('downloadUpdateBtn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const dl = btn.dataset.downloadUrl;
+        const rel = btn.dataset.releaseUrl;
+        if (dl) window.open(dl, '_blank');
+        if (rel) window.location.href = rel;
+      });
+    }
+
+    const notesBtn = document.getElementById('toggleNotesBtn');
+    const notes = document.getElementById('updateNotes');
+    if (notesBtn && notes) {
+      notesBtn.addEventListener('click', () => {
+        const isHidden = notes.style.display === 'none' || !notes.style.display;
+        notes.style.display = isHidden ? 'block' : 'none';
+        notesBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        notesBtn.textContent = isHidden ? 'Скрыть изменения' : 'Прочитать изменения';
+      });
+    }
   });
 </script>
 {% endif %}
-
 <script>
-  document.querySelectorAll('.card-course[data-href]').forEach(card => {
-    card.addEventListener('click', () => {
-      window.location.href = card.dataset.href;
+  function updateThemeToggleButton() {
+    const btn = document.getElementById('themeToggleBtn');
+    if (!btn) return;
+    const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+    const icon = btn.querySelector('i');
+    if (!icon) return;
+    if (theme === 'dark') {
+      icon.className = 'bi bi-moon-stars';
+      btn.title = 'Тёмная тема';
+    } else {
+      icon.className = 'bi bi-sun';
+      btn.title = 'Светлая тема';
+    }
+  }
+
+  function initThemeToggle() {
+    const btn = document.getElementById('themeToggleBtn');
+    if (!btn) return;
+    updateThemeToggleButton();
+    btn.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      const next = (cur === 'dark') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-bs-theme', next);
+      localStorage.setItem('rs-theme', next);
+      updateThemeToggleButton();
     });
+  }
+
+  function updateExportSelectedCount() {
+    const cbs = Array.from(document.querySelectorAll('.export-group-cb'));
+    const checked = cbs.filter(cb => cb.checked).length;
+    const el = document.getElementById('exportSelectedCount');
+    if (el) el.textContent = `Выбрано групп: ${checked} из ${cbs.length}`;
+  }
+
+  function setAllExportGroups(state) {
+    document.querySelectorAll('.export-group-cb').forEach(cb => cb.checked = state);
+    updateExportSelectedCount();
+  }
+
+  function downloadExcelSelected() {
+    const ids = Array.from(document.querySelectorAll('.export-group-cb'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+    if (!ids.length) {
+      alert('Выберите хотя бы одну группу');
+      return;
+    }
+    const url = `{{ url_for('course_export_excel', course_id=course.id) }}?groups=${ids.join(',')}`;
+    window.location.href = url;
+
+    const modalEl = document.getElementById('exportExcelModal');
+    if (modalEl) {
+      const m = bootstrap.Modal.getInstance(modalEl);
+      if (m) m.hide();
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initThemeToggle();
+
+    // Навигация по карточкам групп
+    document.querySelectorAll('.card-course[data-href]').forEach(card => {
+      card.addEventListener('click', () => {
+        window.location.href = card.dataset.href;
+      });
+    });
+
+    // Экспорт Excel
+    const modalEl = document.getElementById('exportExcelModal');
+    if (modalEl) {
+      modalEl.addEventListener('show.bs.modal', () => updateExportSelectedCount());
+      modalEl.addEventListener('change', (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains('export-group-cb')) {
+          updateExportSelectedCount();
+        }
+      });
+    }
   });
 </script>
 

@@ -2,9 +2,9 @@ import re
 from io import BytesIO
 from datetime import datetime
 
-from flask import send_file, abort
+from flask import send_file, abort, request
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 
@@ -57,7 +57,16 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
             .all()
         )
 
-        group_ids = parse_group_ids(course.group_ids)
+        selected = (request.args.get("groups") or request.args.get("group_ids"))
+
+        allowed_ids = set(parse_group_ids(course.group_ids))
+        if selected:
+            req_ids = parse_group_ids(selected)
+            group_ids = [gid for gid in req_ids if gid in allowed_ids]
+        else:
+            group_ids = list(allowed_ids)
+
+        group_ids = sorted(group_ids)
         groups = []
         if group_ids:
             groups = Group.query.filter(Group.id.in_(group_ids)).order_by(Group.name).all()
@@ -69,6 +78,7 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
         center = Alignment(horizontal="center", vertical="center")
         center_wrap = Alignment(horizontal="center", vertical="center", wrap_text=True)
         fio_align = Alignment(vertical="center")
+        sep_side = Side(style="medium", color="C9CCD1")
 
         if not groups:
             ws = wb.create_sheet(_safe_sheet_title("Нет групп", used_titles))
@@ -93,6 +103,12 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                     ws.cell(row=3, column=col, value="Балл")
                     ws.cell(row=3, column=col + 1, value="Комментарий")
                     col += 2
+
+                # Итоговая сумма по студенту
+                ws.cell(row=2, column=col, value="Сумма")
+                ws.merge_cells(start_row=2, start_column=col, end_row=3, end_column=col)
+                sum_col = col
+                col += 1
 
                 last_col = col - 1
                 ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(1, last_col))
@@ -135,16 +151,26 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                     c2.alignment = fio_align
 
                     col = 3
+                    score_cols = []
                     for p in practice_list:
                         score, comment = grade_map.get((s.id, p.id), (None, ""))
 
                         sc_cell = ws.cell(row=r, column=col, value=score)
                         sc_cell.alignment = center
 
+                        score_cols.append(col)
+
                         cm_cell = ws.cell(row=r, column=col + 1, value=comment)
                         cm_cell.alignment = center_wrap
 
                         col += 2
+
+                    # Формула суммы (берём только колонки "Балл")
+                    if score_cols:
+                        refs = [f"{get_column_letter(c)}{r}" for c in score_cols]
+                        ws.cell(row=r, column=sum_col, value=f"=SUM({','.join(refs)})").alignment = center
+                    else:
+                        ws.cell(row=r, column=sum_col, value=0).alignment = center
 
                     r += 1
 
@@ -156,7 +182,43 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                     widths[c] = 10
                     widths[c + 1] = 32
                     c += 2
+                widths[sum_col] = 12
                 _auto_fit_some(ws, widths)
+
+                # Вертикальные линии-разделители между блоками практик
+                last_row = max(3, r - 1)
+                for i in range(len(practice_list)):
+                    comment_col = 3 + i * 2 + 1
+                    for rr in range(2, last_row + 1):
+                        cell = ws.cell(row=rr, column=comment_col)
+                        b = cell.border
+                        cell.border = Border(
+                            left=b.left,
+                            right=sep_side,
+                            top=b.top,
+                            bottom=b.bottom,
+                            diagonal=b.diagonal,
+                            diagonal_direction=b.diagonal_direction,
+                            outline=b.outline,
+                            vertical=b.vertical,
+                            horizontal=b.horizontal,
+                        )
+
+                # Разделитель перед суммой
+                for rr in range(2, last_row + 1):
+                    cell = ws.cell(row=rr, column=sum_col)
+                    b = cell.border
+                    cell.border = Border(
+                        left=sep_side,
+                        right=b.right,
+                        top=b.top,
+                        bottom=b.bottom,
+                        diagonal=b.diagonal,
+                        diagonal_direction=b.diagonal_direction,
+                        outline=b.outline,
+                        vertical=b.vertical,
+                        horizontal=b.horizontal,
+                    )
 
         bio = BytesIO()
         wb.save(bio)
