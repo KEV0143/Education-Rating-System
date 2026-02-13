@@ -1,1 +1,1 @@
-.
+# Education Rating System

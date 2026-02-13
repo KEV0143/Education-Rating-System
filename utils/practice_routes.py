@@ -1,9 +1,19 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import render_template, request, jsonify, abort
 
 
-def register_practice_routes(app, db, Course, Group, Student, Practice, PracticeGrade, parse_group_ids):
+def register_practice_routes(
+    app,
+    db,
+    Course,
+    Group,
+    Student,
+    Practice,
+    PracticeGrade,
+    PracticeGroupInterval,
+    parse_group_ids,
+):
 
     def _get_course_or_404(course_id: int):
         c = db.session.get(Course, course_id)
@@ -47,6 +57,62 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         except Exception:
             return None
 
+    def _date_iso(d):
+        if not d:
+            return None
+        try:
+            return d.isoformat()
+        except Exception:
+            return None
+
+    def _parse_optional_interval(start_raw, end_raw):
+        start_s = str(start_raw or "").strip()
+        end_s = str(end_raw or "").strip()
+
+        if not start_s and not end_s:
+            return None, None
+        if not start_s or not end_s:
+            abort(400, description="Both start_date and end_date are required")
+
+        try:
+            start_d = date.fromisoformat(start_s)
+            end_d = date.fromisoformat(end_s)
+        except Exception:
+            abort(400, description="Invalid date interval")
+
+        if end_d < start_d:
+            abort(400, description="End date must be >= start date")
+
+        return start_d, end_d
+
+    def _effective_interval(practice, group_id: int):
+        override = PracticeGroupInterval.query.filter_by(
+            practice_id=practice.id,
+            group_id=group_id,
+        ).first()
+        if override:
+            return override.start_date, override.end_date, True
+        return practice.start_date, practice.end_date, False
+
+    def _save_group_interval(practice, group_id: int, start_d, end_d):
+        override = PracticeGroupInterval.query.filter_by(
+            practice_id=practice.id,
+            group_id=group_id,
+        ).first()
+
+        if practice.start_date == start_d and practice.end_date == end_d:
+            if override:
+                db.session.delete(override)
+            return start_d, end_d, False
+
+        if not override:
+            override = PracticeGroupInterval(practice_id=practice.id, group_id=group_id)
+            db.session.add(override)
+
+        override.start_date = start_d
+        override.end_date = end_d
+        return start_d, end_d, True
+
     @app.get("/course/<int:course_id>/assessments")
     def course_assessments(course_id: int):
         course = _get_course_or_404(course_id)
@@ -56,7 +122,7 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         if group_ids:
             groups = Group.query.filter(Group.id.in_(group_ids)).order_by(Group.name).all()
 
-        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.desc()).all()
+        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.asc()).all()
 
         return render_template(
             "course_assessments.html",
@@ -85,7 +151,19 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         if max_score < min_score:
             return jsonify({"success": False, "error": "Max must be >= Min"}), 400
 
-        p = Practice(course_id=course.id, title=title, min_score=min_score, max_score=max_score)
+        start_date, end_date = _parse_optional_interval(
+            data.get("start_date"),
+            data.get("end_date"),
+        )
+
+        p = Practice(
+            course_id=course.id,
+            title=title,
+            min_score=min_score,
+            max_score=max_score,
+            start_date=start_date,
+            end_date=end_date,
+        )
         db.session.add(p)
         db.session.commit()
         return jsonify({"success": True, "practice": p.to_dict()})
@@ -110,9 +188,21 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         if max_score < min_score:
             return jsonify({"success": False, "error": "Max must be >= Min"}), 400
 
+        start_date, end_date = _parse_optional_interval(
+            data.get("start_date", _date_iso(p.start_date)),
+            data.get("end_date", _date_iso(p.end_date)),
+        )
+
         p.title = title
         p.min_score = min_score
         p.max_score = max_score
+        p.start_date = start_date
+        p.end_date = end_date
+
+        overrides = PracticeGroupInterval.query.filter_by(practice_id=p.id).all()
+        for ov in overrides:
+            if ov.start_date == start_date and ov.end_date == end_date:
+                db.session.delete(ov)
 
         db.session.commit()
         return jsonify({"success": True, "practice": p.to_dict()})
@@ -130,10 +220,22 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
         course = _get_course_or_404(practice.course_id)
 
         _ensure_group_in_course(course, group_id)
+        start_date, end_date, has_override = _effective_interval(practice, group_id)
+
+        practice_payload = {
+            "id": practice.id,
+            "min_score": practice.min_score,
+            "max_score": practice.max_score,
+            "start_date": _date_iso(start_date),
+            "end_date": _date_iso(end_date),
+            "default_start_date": _date_iso(practice.start_date),
+            "default_end_date": _date_iso(practice.end_date),
+            "has_group_interval_override": has_override,
+        }
 
         students = Student.query.filter_by(group_id=group_id).order_by(Student.fio).all()
         if not students:
-            return jsonify({"success": True, "rows": []})
+            return jsonify({"success": True, "rows": [], "practice": practice_payload})
 
         student_ids = [s.id for s in students]
 
@@ -156,7 +258,37 @@ def register_practice_routes(app, db, Course, Group, Student, Practice, Practice
                 "updated_at": _dt_iso(getattr(g, "updated_at", None)) if g else None,
             })
 
-        return jsonify({"success": True, "rows": rows})
+        return jsonify({"success": True, "rows": rows, "practice": practice_payload})
+
+    @app.post("/api/practice/<int:practice_id>/group/<int:group_id>/interval")
+    def api_practice_group_interval_update(practice_id: int, group_id: int):
+        practice = _get_practice_or_404(practice_id)
+        course = _get_course_or_404(practice.course_id)
+        _ensure_group_in_course(course, group_id)
+
+        data = request.get_json(silent=True) or {}
+        start_d, end_d = _parse_optional_interval(
+            data.get("start_date"),
+            data.get("end_date"),
+        )
+
+        start_d, end_d, has_override = _save_group_interval(practice, group_id, start_d, end_d)
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "practice_id": practice.id,
+            "group_id": group_id,
+            "interval": {
+                "start_date": _date_iso(start_d),
+                "end_date": _date_iso(end_d),
+            },
+            "default_interval": {
+                "start_date": _date_iso(practice.start_date),
+                "end_date": _date_iso(practice.end_date),
+            },
+            "has_group_interval_override": has_override,
+        })
 
     @app.post("/api/practice/<int:practice_id>/grade_one")
     def api_grade_one(practice_id: int):

@@ -73,7 +73,6 @@
     }
     .course-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* Иконка для карточек групп */
     .group-icon-wrap{
       width: 100%;
       height: 100%;
@@ -154,6 +153,7 @@
   </style>
 </head>
 <body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
 
 <div class="container py-5">
 
@@ -175,9 +175,7 @@
 
     <div class="ms-3">
       <div class="d-flex gap-2 flex-wrap justify-content-end">
-        <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
-          <i class="bi bi-sun"></i>
-        </button>
+        {{ settings_button() }}
         <a class="btn btn-primary d-inline-flex align-items-center"
            href="{{ url_for('course_assessments', course_id=course.id) }}">
           <i class="bi bi-clipboard-check me-2"></i>
@@ -193,14 +191,9 @@
     </div>
   </div>
 
-  <!-- Карточка курса сверху -->
   <div class="card-course mb-4" style="cursor: default;">
     <div class="course-img-container">
-      {% if course.image_filename == 'default.jpg' %}
-        <img src="/placeholder" class="course-img">
-      {% else %}
-        <img src="{{ url_for('static', filename='uploads/' + course.image_filename) }}" class="course-img" onerror="this.src='/placeholder'">
-      {% endif %}
+      <img src="{{ url_for('course_image', course_id=course.id) }}" class="course-img" onerror="this.src='/placeholder'">
     </div>
 
     <div class="course-body">
@@ -216,7 +209,6 @@
     </div>
   </div>
 
-  <!-- Карточки групп -->
   {% if groups %}
     {% for g in groups %}
       {% set sc = student_counts.get(g.id, 0) %}
@@ -280,7 +272,7 @@
 
 </div>
 
-<!-- Выгрузка Excel: выбор групп -->
+{{ settings_modal(app_version) }}
 <div class="modal fade" id="exportExcelModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -352,9 +344,36 @@
         </div>
         {% endif %}
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
-        <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-download-url="{{ update_url }}" data-release-url="{{ update_release_url|default('', true) }}">Скачать</button>
+      <div class="modal-footer d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-primary" type="button" id="viewChangesBtn" data-release-url="{{ update_release_url|default('', true) }}" {% if not update_release_url %}disabled{% endif %}>Посмотреть изменения</button>
+        <div class="d-flex gap-2 ms-auto">
+          <button class="btn btn-outline-secondary" type="button" id="updateLaterBtn" data-bs-dismiss="modal">Позже</button>
+          <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}" data-exe-url="{{ update_exe_url|default('', true) }}">Скачать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="updateDownloadTypeModal" tabindex="-1" aria-labelledby="updateDownloadTypeModalLabel" aria-hidden="true" style="--bs-backdrop-opacity: .94;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateDownloadTypeModalLabel">Выберите формат загрузки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-3">Доступны два варианта поставки обновления:</div>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-secondary text-start" type="button" id="downloadSourceBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}">
+            Архив исходного кода (Open Source, .zip)
+          </button>
+          <button class="btn btn-outline-primary text-start" type="button" id="downloadExeBtn" data-exe-url="{{ update_exe_url|default('', true) }}" {% if not update_exe_url %}disabled{% endif %}>
+            Готовое приложение для Windows (.exe)
+          </button>
+        </div>
+        {% if not update_exe_url %}
+        <div class="small text-muted mt-3">Для этого релиза файл .exe пока не опубликован.</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -366,18 +385,62 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const modalEl = document.getElementById('updateModal');
-    if (modalEl) {
-      const modal = new bootstrap.Modal(modalEl);
-      modal.show();
+    const updateModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    if (updateModal) {
+      updateModal.show();
+    }
+
+    const viewChangesBtn = document.getElementById('viewChangesBtn');
+    if (viewChangesBtn) {
+      viewChangesBtn.addEventListener('click', () => {
+        const rel = viewChangesBtn.dataset.releaseUrl;
+        if (rel) window.open(rel, '_blank');
+      });
     }
 
     const btn = document.getElementById('downloadUpdateBtn');
+    const downloadTypeModalEl = document.getElementById('updateDownloadTypeModal');
+    const downloadTypeModal = downloadTypeModalEl ? new bootstrap.Modal(downloadTypeModalEl) : null;
     if (btn) {
       btn.addEventListener('click', () => {
-        const dl = btn.dataset.downloadUrl;
-        const rel = btn.dataset.releaseUrl;
-        if (dl) window.open(dl, '_blank');
-        if (rel) window.location.href = rel;
+        if (downloadTypeModal) {
+          if (updateModal) updateModal.hide();
+          setTimeout(() => downloadTypeModal.show(), 180);
+          return;
+        }
+        const fallbackUrl = btn.dataset.sourceUrl || btn.dataset.exeUrl;
+        if (fallbackUrl) window.open(fallbackUrl, '_blank');
+      });
+    }
+
+    const sourceBtn = document.getElementById('downloadSourceBtn');
+    if (sourceBtn) {
+      sourceBtn.addEventListener('click', () => {
+        const sourceUrl = sourceBtn.dataset.sourceUrl;
+        if (sourceUrl) window.open(sourceUrl, '_blank');
+      });
+    }
+
+    const exeBtn = document.getElementById('downloadExeBtn');
+    if (exeBtn) {
+      exeBtn.addEventListener('click', () => {
+        const exeUrl = exeBtn.dataset.exeUrl;
+        if (exeUrl) window.open(exeUrl, '_blank');
+      });
+    }
+
+    const laterBtn = document.getElementById('updateLaterBtn');
+    if (laterBtn) {
+      laterBtn.addEventListener('click', () => {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        const token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['X-CSRFToken'] = token;
+        fetch('/api/update/remind_later', {
+          method: 'POST',
+          headers,
+          body: '{}'
+        }).catch(() => {});
       });
     }
 
@@ -395,34 +458,6 @@
 </script>
 {% endif %}
 <script>
-  function updateThemeToggleButton() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
-    const icon = btn.querySelector('i');
-    if (!icon) return;
-    if (theme === 'dark') {
-      icon.className = 'bi bi-moon-stars';
-      btn.title = 'Тёмная тема';
-    } else {
-      icon.className = 'bi bi-sun';
-      btn.title = 'Светлая тема';
-    }
-  }
-
-  function initThemeToggle() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    updateThemeToggleButton();
-    btn.addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
-      const next = (cur === 'dark') ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-bs-theme', next);
-      localStorage.setItem('rs-theme', next);
-      updateThemeToggleButton();
-    });
-  }
-
   function updateExportSelectedCount() {
     const cbs = Array.from(document.querySelectorAll('.export-group-cb'));
     const checked = cbs.filter(cb => cb.checked).length;
@@ -454,16 +489,12 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    initThemeToggle();
-
-    // Навигация по карточкам групп
     document.querySelectorAll('.card-course[data-href]').forEach(card => {
       card.addEventListener('click', () => {
         window.location.href = card.dataset.href;
       });
     });
 
-    // Экспорт Excel
     const modalEl = document.getElementById('exportExcelModal');
     if (modalEl) {
       modalEl.addEventListener('show.bs.modal', () => updateExportSelectedCount());

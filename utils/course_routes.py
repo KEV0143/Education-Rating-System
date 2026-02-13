@@ -1,8 +1,18 @@
-from flask import render_template, abort
+from flask import abort, render_template
 from sqlalchemy import func
 
 
-def register_course_routes(app, db, Course, Group, Student, Practice, PracticeGrade, parse_group_ids):
+def register_course_routes(
+    app,
+    db,
+    Course,
+    Group,
+    Student,
+    Practice,
+    PracticeGrade,
+    PracticeGroupInterval,
+    parse_group_ids,
+):
     @app.get("/course/<int:course_id>")
     def course_detail(course_id: int):
         course = db.session.get(Course, course_id)
@@ -14,7 +24,7 @@ def register_course_routes(app, db, Course, Group, Student, Practice, PracticeGr
         student_counts = {}
         group_work_counts = {}
         group_score_sums = {}
-        practices = Practice.query.filter_by(course_id=course.id).all()
+        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.asc()).all()
         total_practices = len(practices)
         max_per_student = float(sum(float(p.max_score) for p in practices)) if practices else 0.0
 
@@ -83,7 +93,19 @@ def register_course_routes(app, db, Course, Group, Student, Practice, PracticeGr
         if not group:
             abort(404)
 
-        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.desc()).all()
+        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.asc()).all()
+        if practices:
+            pids = [p.id for p in practices]
+            overrides = PracticeGroupInterval.query.filter(
+                PracticeGroupInterval.practice_id.in_(pids),
+                PracticeGroupInterval.group_id == group.id,
+            ).all()
+            override_map = {ov.practice_id: ov for ov in overrides}
+
+            for p in practices:
+                ov = override_map.get(p.id)
+                p.effective_start_date = ov.start_date if ov else p.start_date
+                p.effective_end_date = ov.end_date if ov else p.end_date
 
         return render_template(
             "course_group.html",

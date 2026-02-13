@@ -15,7 +15,7 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-  
+
   <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
   <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
 
@@ -73,6 +73,7 @@
   </style>
 </head>
 <body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
 
 <div class="container py-5" id="page" data-course-id="{{ course.id }}">
   <div class="d-flex justify-content-between align-items-start mb-4">
@@ -87,9 +88,7 @@
     </div>
 
     <div class="ms-3">
-      <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
-        <i class="bi bi-sun"></i>
-      </button>
+      {{ settings_button() }}
     </div>
   </div>
 
@@ -113,6 +112,16 @@
             </div>
           </div>
 
+          <div class="row g-2 mt-1">
+            <div class="col">
+              <input class="form-control" id="pStartDate" type="date">
+            </div>
+            <div class="col">
+              <input class="form-control" id="pEndDate" type="date">
+            </div>
+          </div>
+          <div class="small-muted mt-1">Сроки необязательны. Если задать, интервал применится ко всем группам.</div>
+
           <button class="btn btn-primary w-100 mt-2" type="button" onclick="createPractice()">
             <i class="bi bi-plus-circle me-1"></i> Добавить
           </button>
@@ -130,10 +139,23 @@
                    data-title="{{ p.title }}"
                    data-min="{{ p.min_score }}"
                    data-max="{{ p.max_score }}"
+                   data-start="{{ p.start_date.isoformat() if p.start_date else '' }}"
+                   data-end="{{ p.end_date.isoformat() if p.end_date else '' }}"
                    onclick="selectPractice(this)">
                 <div class="d-flex justify-content-between align-items-start">
                   <div class="fw-semibold text-truncate">{{ p.title }}</div>
                   <span class="badge-soft ms-2">{{ p.min_score }}—{{ p.max_score }}</span>
+                </div>
+                <div class="small-muted practice-interval">
+                  {% if p.start_date and p.end_date %}
+                    Сроки выполнения: {{ p.start_date.strftime('%d.%m.%Y') }} — {{ p.end_date.strftime('%d.%m.%Y') }}
+                  {% elif p.start_date %}
+                    Сроки выполнения: с {{ p.start_date.strftime('%d.%m.%Y') }}
+                  {% elif p.end_date %}
+                    Сроки выполнения: до {{ p.end_date.strftime('%d.%m.%Y') }}
+                  {% else %}
+                    Сроки выполнения: не заданы
+                  {% endif %}
                 </div>
                 <div class="small-muted">Нажмите, чтобы редактировать</div>
               </div>
@@ -164,6 +186,17 @@
             <div class="col">
               <label class="small-muted">Максимальный балл</label>
               <input class="form-control" id="eMax" type="number" step="0.5">
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="small-muted">Начало практики</label>
+              <input class="form-control" id="eStartDate" type="date">
+            </div>
+            <div class="col">
+              <label class="small-muted">Конец практики</label>
+              <input class="form-control" id="eEndDate" type="date">
             </div>
           </div>
 
@@ -207,6 +240,7 @@
   </div>
 </div>
 
+{{ settings_modal(app_version) }}
 {% if update_available and update_url %}
 <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -227,9 +261,36 @@
         </div>
         {% endif %}
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
-        <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-download-url="{{ update_url }}" data-release-url="{{ update_release_url|default('', true) }}">Скачать</button>
+      <div class="modal-footer d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-primary" type="button" id="viewChangesBtn" data-release-url="{{ update_release_url|default('', true) }}" {% if not update_release_url %}disabled{% endif %}>Посмотреть изменения</button>
+        <div class="d-flex gap-2 ms-auto">
+          <button class="btn btn-outline-secondary" type="button" id="updateLaterBtn" data-bs-dismiss="modal">Позже</button>
+          <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}" data-exe-url="{{ update_exe_url|default('', true) }}">Скачать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="updateDownloadTypeModal" tabindex="-1" aria-labelledby="updateDownloadTypeModalLabel" aria-hidden="true" style="--bs-backdrop-opacity: .94;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateDownloadTypeModalLabel">Выберите формат загрузки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-3">Доступны два варианта поставки обновления:</div>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-secondary text-start" type="button" id="downloadSourceBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}">
+            Архив исходного кода (Open Source, .zip)
+          </button>
+          <button class="btn btn-outline-primary text-start" type="button" id="downloadExeBtn" data-exe-url="{{ update_exe_url|default('', true) }}" {% if not update_exe_url %}disabled{% endif %}>
+            Готовое приложение для Windows (.exe)
+          </button>
+        </div>
+        {% if not update_exe_url %}
+        <div class="small text-muted mt-3">Для этого релиза файл .exe пока не опубликован.</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -241,18 +302,62 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const modalEl = document.getElementById('updateModal');
-    if (modalEl) {
-      const modal = new bootstrap.Modal(modalEl);
-      modal.show();
+    const updateModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    if (updateModal) {
+      updateModal.show();
+    }
+
+    const viewChangesBtn = document.getElementById('viewChangesBtn');
+    if (viewChangesBtn) {
+      viewChangesBtn.addEventListener('click', () => {
+        const rel = viewChangesBtn.dataset.releaseUrl;
+        if (rel) window.open(rel, '_blank');
+      });
     }
 
     const btn = document.getElementById('downloadUpdateBtn');
+    const downloadTypeModalEl = document.getElementById('updateDownloadTypeModal');
+    const downloadTypeModal = downloadTypeModalEl ? new bootstrap.Modal(downloadTypeModalEl) : null;
     if (btn) {
       btn.addEventListener('click', () => {
-        const dl = btn.dataset.downloadUrl;
-        const rel = btn.dataset.releaseUrl;
-        if (dl) window.open(dl, '_blank');
-        if (rel) window.location.href = rel;
+        if (downloadTypeModal) {
+          if (updateModal) updateModal.hide();
+          setTimeout(() => downloadTypeModal.show(), 180);
+          return;
+        }
+        const fallbackUrl = btn.dataset.sourceUrl || btn.dataset.exeUrl;
+        if (fallbackUrl) window.open(fallbackUrl, '_blank');
+      });
+    }
+
+    const sourceBtn = document.getElementById('downloadSourceBtn');
+    if (sourceBtn) {
+      sourceBtn.addEventListener('click', () => {
+        const sourceUrl = sourceBtn.dataset.sourceUrl;
+        if (sourceUrl) window.open(sourceUrl, '_blank');
+      });
+    }
+
+    const exeBtn = document.getElementById('downloadExeBtn');
+    if (exeBtn) {
+      exeBtn.addEventListener('click', () => {
+        const exeUrl = exeBtn.dataset.exeUrl;
+        if (exeUrl) window.open(exeUrl, '_blank');
+      });
+    }
+
+    const laterBtn = document.getElementById('updateLaterBtn');
+    if (laterBtn) {
+      laterBtn.addEventListener('click', () => {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        const token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['X-CSRFToken'] = token;
+        fetch('/api/update/remind_later', {
+          method: 'POST',
+          headers,
+          body: '{}'
+        }).catch(() => {});
       });
     }
 
@@ -274,6 +379,29 @@
   const COURSE_ID = Number(document.getElementById('page').dataset.courseId);
   let activePracticeId = null;
 
+  function normalizedDateValue(v) {
+    const s = String(v || '').trim();
+    return s || null;
+  }
+
+  function formatDateOnly(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso);
+    return d.toLocaleDateString('ru-RU', {
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+  }
+
+  function intervalDisplayText(startIso, endIso) {
+    const start = normalizedDateValue(startIso);
+    const end = normalizedDateValue(endIso);
+    if (!start && !end) return 'Сроки выполнения: не заданы';
+    if (start && end) return `Сроки выполнения: ${formatDateOnly(start)} — ${formatDateOnly(end)}`;
+    if (start) return `Сроки выполнения: с ${formatDateOnly(start)}`;
+    return `Сроки выполнения: до ${formatDateOnly(end)}`;
+  }
+
   function selectPractice(el) {
     document.querySelectorAll('.practice-item').forEach(x => x.classList.remove('active'));
     el.classList.add('active');
@@ -286,19 +414,27 @@
     document.getElementById('eTitle').value = el.dataset.title || '';
     document.getElementById('eMin').value = el.dataset.min || '0';
     document.getElementById('eMax').value = el.dataset.max || '10';
+    document.getElementById('eStartDate').value = el.dataset.start || '';
+    document.getElementById('eEndDate').value = el.dataset.end || '';
   }
 
   function createPractice() {
     const title = (document.getElementById('pTitle').value || '').trim();
     const min_score = document.getElementById('pMin').value;
     const max_score = document.getElementById('pMax').value;
+    const start_date = normalizedDateValue(document.getElementById('pStartDate').value);
+    const end_date = normalizedDateValue(document.getElementById('pEndDate').value);
 
     if (!title) { alert('Введите название задания'); return; }
+    if ((start_date && !end_date) || (!start_date && end_date)) {
+      alert('Укажите обе даты или оставьте обе пустыми');
+      return;
+    }
 
     fetch(`/api/course/${COURSE_ID}/practice_create`, {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
-      body: JSON.stringify({title, min_score, max_score})
+      body: JSON.stringify({title, min_score, max_score, start_date, end_date})
     })
     .then(r => r.json())
     .then(d => {
@@ -308,25 +444,31 @@
       const p = d.practice;
 
       const list = document.getElementById('practiceList');
+      const empty = list.querySelector('.text-muted.text-center.py-4');
+      if (empty) list.innerHTML = '';
       const item = document.createElement('div');
       item.className = 'list-item practice-item';
       item.dataset.id = p.id;
       item.dataset.title = p.title;
       item.dataset.min = p.min_score;
       item.dataset.max = p.max_score;
+      item.dataset.start = p.start_date || '';
+      item.dataset.end = p.end_date || '';
 
       item.innerHTML = `
         <div class="d-flex justify-content-between align-items-start">
           <div class="fw-semibold text-truncate"></div>
           <span class="badge-soft ms-2"></span>
         </div>
-        <div class="small-muted">Нажми, чтобы редактировать</div>
+        <div class="small-muted practice-interval"></div>
+        <div class="small-muted">Нажмите, чтобы редактировать</div>
       `;
       item.querySelector('.fw-semibold').textContent = p.title;
       item.querySelector('.badge-soft').textContent = `${p.min_score}—${p.max_score}`;
+      item.querySelector('.practice-interval').textContent = intervalDisplayText(p.start_date, p.end_date);
 
       item.addEventListener('click', () => selectPractice(item));
-      list.prepend(item);
+      list.appendChild(item);
 
       const cnt = document.getElementById('practiceCount');
       cnt.innerText = String(parseInt(cnt.innerText || '0', 10) + 1);
@@ -342,13 +484,19 @@
     const title = (document.getElementById('eTitle').value || '').trim();
     const min_score = document.getElementById('eMin').value;
     const max_score = document.getElementById('eMax').value;
+    const start_date = normalizedDateValue(document.getElementById('eStartDate').value);
+    const end_date = normalizedDateValue(document.getElementById('eEndDate').value);
 
     if (!title) { alert('Название не может быть пустым'); return; }
+    if ((start_date && !end_date) || (!start_date && end_date)) {
+      alert('Укажите обе даты или оставьте обе пустыми');
+      return;
+    }
 
     fetch(`/api/practice/${activePracticeId}/update`, {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
-      body: JSON.stringify({title, min_score, max_score})
+      body: JSON.stringify({title, min_score, max_score, start_date, end_date})
     })
     .then(r => r.json())
     .then(d => {
@@ -359,9 +507,13 @@
         el.dataset.title = d.practice.title;
         el.dataset.min = d.practice.min_score;
         el.dataset.max = d.practice.max_score;
+        el.dataset.start = d.practice.start_date || '';
+        el.dataset.end = d.practice.end_date || '';
 
         el.querySelector('.fw-semibold').textContent = d.practice.title;
         el.querySelector('.badge-soft').textContent = `${d.practice.min_score}—${d.practice.max_score}`;
+        const intervalEl = el.querySelector('.practice-interval');
+        if (intervalEl) intervalEl.textContent = intervalDisplayText(d.practice.start_date, d.practice.end_date);
       }
     })
     .catch(() => alert('Ошибка сети'));
@@ -391,39 +543,6 @@
     })
     .catch(() => alert('Ошибка сети'));
   }
-
-  // Тёмная тема
-  function updateThemeToggleButton() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
-    const icon = btn.querySelector('i');
-    if (!icon) return;
-    if (theme === 'dark') {
-      icon.className = 'bi bi-moon-stars';
-      btn.title = 'Тёмная тема';
-    } else {
-      icon.className = 'bi bi-sun';
-      btn.title = 'Светлая тема';
-    }
-  }
-
-  function initThemeToggle() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    updateThemeToggleButton();
-    btn.addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
-      const next = (cur === 'dark') ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-bs-theme', next);
-      localStorage.setItem('rs-theme', next);
-      updateThemeToggleButton();
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    initThemeToggle();
-  });
 </script>
 
 </body>

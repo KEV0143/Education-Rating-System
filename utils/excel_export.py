@@ -104,7 +104,6 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                     ws.cell(row=3, column=col + 1, value="Комментарий")
                     col += 2
 
-                # Итоговая сумма по студенту
                 ws.cell(row=2, column=col, value="Сумма")
                 ws.merge_cells(start_row=2, start_column=col, end_row=3, end_column=col)
                 sum_col = col
@@ -165,7 +164,6 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
 
                         col += 2
 
-                    # Формула суммы (берём только колонки "Балл")
                     if score_cols:
                         refs = [f"{get_column_letter(c)}{r}" for c in score_cols]
                         ws.cell(row=r, column=sum_col, value=f"=SUM({','.join(refs)})").alignment = center
@@ -185,7 +183,6 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                 widths[sum_col] = 12
                 _auto_fit_some(ws, widths)
 
-                # Вертикальные линии-разделители между блоками практик
                 last_row = max(3, r - 1)
                 for i in range(len(practice_list)):
                     comment_col = 3 + i * 2 + 1
@@ -204,7 +201,6 @@ def register_excel_export_routes(app, db, Course, Group, Student, Practice, Prac
                             horizontal=b.horizontal,
                         )
 
-                # Разделитель перед суммой
                 for rr in range(2, last_row + 1):
                     cell = ws.cell(row=rr, column=sum_col)
                     b = cell.border

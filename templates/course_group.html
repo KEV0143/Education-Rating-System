@@ -47,18 +47,44 @@
 
     body { background-color: var(--rs-page-bg); color: var(--rs-text); font-family: 'Segoe UI', system-ui, sans-serif; }
     .panel-card { border-radius: 12px; box-shadow: 0 2px 5px var(--rs-shadow); border: 1px solid var(--rs-border); background: var(--rs-card-bg); }
-    .student-scroll-area { height: 560px; overflow-y: auto; border: 1px solid var(--rs-soft-border); border-radius: 10px; background: var(--rs-card-bg); }
+    .students-panel-card { min-height: 0; }
+    .student-scroll-area { height: 840px; overflow-y: auto; border: 1px solid var(--rs-soft-border); border-radius: 10px; background: var(--rs-card-bg); }
+    #page{ padding-top: 1.25rem !important; padding-bottom: 1rem !important; }
     .small-muted { font-size: .85rem; color: var(--rs-muted); }
+
+    @media (min-width: 992px){
+      .panels-row > .col-lg-4,
+      .panels-row > .col-lg-8 {
+        display: flex;
+      }
+      .panels-row .panel-card {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    #practiceChips{
+      display: flex !important;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+    }
 
     .practice-chip {
       cursor: pointer;
       border: 1px solid var(--rs-soft-border);
       background: var(--rs-card-bg);
       border-radius: 10px;
-      padding: 8px 10px;
+      padding: 5px 10px;
       transition: .15s;
       user-select: none;
-      min-width: 160px;
+      min-width: 0;
+      width: 100%;
+      min-height: 66px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
     }
     .practice-chip:hover { background: var(--rs-hover-bg); }
 
@@ -69,12 +95,41 @@
       color: var(--rs-text);
     }
     .chip-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .chip-sub { font-size: .8rem; color: var(--rs-muted); }
+    .chip-sub { font-size: .76rem; color: var(--rs-muted); }
+    .chip-score-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 1.3rem;
+      line-height: 1;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    .chip-interval {
+      margin-top: 1px;
+      line-height: 1.1;
+      min-height: 1.6em;
+    }
+
+    .score-input,
+    .comment-input {
+      min-height: 2.15rem;
+    }
 
     .save-indicator { font-size: .85rem; color: var(--rs-muted); }
     .save-indicator.saving { color: #0d6efd; }
     .save-indicator.saved { color: #198754; }
     .save-indicator.error { color: #dc3545; }
+    .score-input.filled,
+    .comment-input.filled {
+      border-color: rgba(13, 110, 253, 0.45);
+      box-shadow: 0 0 0 0.08rem rgba(13, 110, 253, 0.12);
+    }
+    :root[data-bs-theme="dark"] .score-input.filled,
+    :root[data-bs-theme="dark"] .comment-input.filled {
+      border-color: rgba(173, 181, 189, 0.6);
+      box-shadow: 0 0 0 0.08rem rgba(173, 181, 189, 0.18);
+    }
 
     .student-name { cursor: pointer; }
 
@@ -115,11 +170,18 @@
     :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
     :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
     :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
+
+    @media (max-width: 991.98px){
+      .students-panel-card { min-height: auto; }
+      .student-scroll-area { height: 560px; }
+      #page{ padding-top: 1rem !important; padding-bottom: 1rem !important; }
+    }
   </style>
 </head>
 <body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
 
-<div class="container py-5" id="page"
+<div class="container py-4" id="page"
      data-course-id="{{ course.id }}"
      data-group-id="{{ group.id }}">
 
@@ -136,9 +198,7 @@
 
     <div class="ms-3">
       <div class="d-flex gap-2 flex-wrap justify-content-end">
-        <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
-          <i class="bi bi-sun"></i>
-        </button>
+        {{ settings_button() }}
         <a class="btn btn-outline-primary"
            href="{{ url_for('course_assessments', course_id=course.id) }}">
           <i class="bi bi-clipboard2-check me-1"></i> Задания и баллы
@@ -147,9 +207,9 @@
     </div>
   </div>
 
-  <div class="row g-3">
+  <div class="row g-3 panels-row">
     <div class="col-lg-4">
-      <div class="panel-card p-3">
+      <div class="panel-card p-3 students-panel-card">
         <div class="fw-bold mb-2">Задания</div>
 
         {% if practices %}
@@ -160,17 +220,29 @@
                    data-title="{{ p.title }}"
                    data-min="{{ p.min_score }}"
                    data-max="{{ p.max_score }}"
+                   data-start="{{ p.effective_start_date.isoformat() if p.effective_start_date else '' }}"
+                   data-end="{{ p.effective_end_date.isoformat() if p.effective_end_date else '' }}"
                    onclick="selectPractice(this)">
-                <div class="d-flex justify-content-between gap-2">
+                <div class="d-flex justify-content-between align-items-center gap-2">
                   <div class="chip-title" title="{{ p.title }}">{{ p.title }}</div>
-                  <span class="badge bg-primary">{{ p.min_score }}–{{ p.max_score }}</span>
+                  <span class="badge bg-primary chip-score-badge">{{ p.min_score }}–{{ p.max_score }}</span>
                 </div>
-                <div class="chip-sub">Нажми для оценивания</div>
+                <div class="chip-sub chip-interval">
+                  {% if p.effective_start_date and p.effective_end_date %}
+                    Сроки выполнения: {{ p.effective_start_date.strftime('%d.%m.%Y') }} — {{ p.effective_end_date.strftime('%d.%m.%Y') }}
+                  {% elif p.effective_start_date %}
+                    Сроки выполнения: с {{ p.effective_start_date.strftime('%d.%m.%Y') }}
+                  {% elif p.effective_end_date %}
+                    Сроки выполнения: до {{ p.effective_end_date.strftime('%d.%m.%Y') }}
+                  {% else %}
+                    Сроки выполнения: не заданы
+                  {% endif %}
+                </div>
               </div>
             {% endfor %}
           </div>
         {% else %}
-          <div class="text-muted">Сначала создай задания в “Задания и баллы”.</div>
+          <div class="text-muted">Сначала создайте задания в “Задания и баллы”.</div>
         {% endif %}
 
         <hr>
@@ -187,20 +259,26 @@
           </button>
         </div>
 
-        <div class="small-muted mt-3">
-          Выделяй студентов галочками слева от ФИО.
+        <div class="small-muted mt-2">
+          Выделяйте студентов галочками слева от ФИО.
+        </div>
+
+        <div class="mt-3 pt-2 border-top">
+          <button class="btn btn-outline-secondary w-100" type="button" onclick="openIntervalModal()">
+            <i class="bi bi-calendar-range me-1"></i> Изменить интервал проведения практики
+          </button>
+          <div class="small-muted mt-2">Настройка применяется к текущей группе.</div>
         </div>
       </div>
     </div>
 
     <div class="col-lg-8">
-      <div class="panel-card p-3">
+      <div class="panel-card p-3 students-panel-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div class="fw-bold">Студенты</div>
           <div class="save-indicator" id="globalSaveIndicator">—</div>
         </div>
 
-        <!-- Поиск -->
         <input class="form-control mb-2" id="studentSearch" placeholder="Поиск по ФИО..." oninput="filterStudents()">
 
         <div class="student-scroll-area p-2" id="studentsArea">
@@ -212,7 +290,7 @@
 
 </div>
 
-<!-- Модалка статистики -->
+{{ settings_modal(app_version) }}
 <div class="modal fade" id="studentStatsModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -222,6 +300,34 @@
       </div>
       <div class="modal-body" id="statsBody">
         <div class="text-center text-muted">Загрузка…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="practiceIntervalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Интервал проведения практики</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col">
+            <label class="form-label mb-1">С</label>
+            <input class="form-control" id="intervalStartDate" type="date">
+          </div>
+          <div class="col">
+            <label class="form-label mb-1">По</label>
+            <input class="form-control" id="intervalEndDate" type="date">
+          </div>
+        </div>
+        <div class="small-muted mt-2">Оставьте обе даты пустыми, если сроки не нужны для этой группы.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" onclick="clearIntervalInputs()">Очистить</button>
+        <button class="btn btn-primary" type="button" onclick="saveGroupInterval()">Сохранить</button>
       </div>
     </div>
   </div>
@@ -247,9 +353,36 @@
         </div>
         {% endif %}
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Позже</button>
-        <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-download-url="{{ update_url }}" data-release-url="{{ update_release_url|default('', true) }}">Скачать</button>
+      <div class="modal-footer d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-primary" type="button" id="viewChangesBtn" data-release-url="{{ update_release_url|default('', true) }}" {% if not update_release_url %}disabled{% endif %}>Посмотреть изменения</button>
+        <div class="d-flex gap-2 ms-auto">
+          <button class="btn btn-outline-secondary" type="button" id="updateLaterBtn" data-bs-dismiss="modal">Позже</button>
+          <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}" data-exe-url="{{ update_exe_url|default('', true) }}">Скачать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="updateDownloadTypeModal" tabindex="-1" aria-labelledby="updateDownloadTypeModalLabel" aria-hidden="true" style="--bs-backdrop-opacity: .94;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateDownloadTypeModalLabel">Выберите формат загрузки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-3">Доступны два варианта поставки обновления:</div>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-secondary text-start" type="button" id="downloadSourceBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}">
+            Архив исходного кода (Open Source, .zip)
+          </button>
+          <button class="btn btn-outline-primary text-start" type="button" id="downloadExeBtn" data-exe-url="{{ update_exe_url|default('', true) }}" {% if not update_exe_url %}disabled{% endif %}>
+            Готовое приложение для Windows (.exe)
+          </button>
+        </div>
+        {% if not update_exe_url %}
+        <div class="small text-muted mt-3">Для этого релиза файл .exe пока не опубликован.</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -261,18 +394,62 @@
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const modalEl = document.getElementById('updateModal');
-    if (modalEl) {
-      const modal = new bootstrap.Modal(modalEl);
-      modal.show();
+    const updateModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    if (updateModal) {
+      updateModal.show();
+    }
+
+    const viewChangesBtn = document.getElementById('viewChangesBtn');
+    if (viewChangesBtn) {
+      viewChangesBtn.addEventListener('click', () => {
+        const rel = viewChangesBtn.dataset.releaseUrl;
+        if (rel) window.open(rel, '_blank');
+      });
     }
 
     const btn = document.getElementById('downloadUpdateBtn');
+    const downloadTypeModalEl = document.getElementById('updateDownloadTypeModal');
+    const downloadTypeModal = downloadTypeModalEl ? new bootstrap.Modal(downloadTypeModalEl) : null;
     if (btn) {
       btn.addEventListener('click', () => {
-        const dl = btn.dataset.downloadUrl;
-        const rel = btn.dataset.releaseUrl;
-        if (dl) window.open(dl, '_blank');
-        if (rel) window.location.href = rel;
+        if (downloadTypeModal) {
+          if (updateModal) updateModal.hide();
+          setTimeout(() => downloadTypeModal.show(), 180);
+          return;
+        }
+        const fallbackUrl = btn.dataset.sourceUrl || btn.dataset.exeUrl;
+        if (fallbackUrl) window.open(fallbackUrl, '_blank');
+      });
+    }
+
+    const sourceBtn = document.getElementById('downloadSourceBtn');
+    if (sourceBtn) {
+      sourceBtn.addEventListener('click', () => {
+        const sourceUrl = sourceBtn.dataset.sourceUrl;
+        if (sourceUrl) window.open(sourceUrl, '_blank');
+      });
+    }
+
+    const exeBtn = document.getElementById('downloadExeBtn');
+    if (exeBtn) {
+      exeBtn.addEventListener('click', () => {
+        const exeUrl = exeBtn.dataset.exeUrl;
+        if (exeUrl) window.open(exeUrl, '_blank');
+      });
+    }
+
+    const laterBtn = document.getElementById('updateLaterBtn');
+    if (laterBtn) {
+      laterBtn.addEventListener('click', () => {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        const token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['X-CSRFToken'] = token;
+        fetch('/api/update/remind_later', {
+          method: 'POST',
+          headers,
+          body: '{}'
+        }).catch(() => {});
       });
     }
 
@@ -298,6 +475,9 @@
   let activePracticeId = null;
   let activePracticeMin = 0;
   let activePracticeMax = 10;
+  let activePracticeStartDate = null;
+  let activePracticeEndDate = null;
+  let intervalModalInstance = null;
 
   const saveTimers = new Map();
   const lastPayload = new Map();
@@ -310,6 +490,57 @@
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit'
     });
+  }
+
+  function normalizeIsoDate(value) {
+    const s = String(value || '').trim();
+    return s ? s.slice(0, 10) : null;
+  }
+
+  function formatDateOnly(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso);
+    return d.toLocaleDateString('ru-RU', {
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+  }
+
+  function formatIntervalText(startIso, endIso) {
+    const start = normalizeIsoDate(startIso);
+    const end = normalizeIsoDate(endIso);
+    if (!start && !end) return 'не заданы';
+    if (start && end) return `${formatDateOnly(start)} — ${formatDateOnly(end)}`;
+    if (start) return `с ${formatDateOnly(start)}`;
+    return `до ${formatDateOnly(end)}`;
+  }
+
+  function getIntervalDisplayText(startIso, endIso) {
+    return `Сроки выполнения: ${formatIntervalText(startIso, endIso)}`;
+  }
+
+  function renderChipInterval(chipEl, startIso, endIso) {
+    if (!chipEl) return;
+    const intervalEl = chipEl.querySelector('.chip-interval');
+    if (!intervalEl) return;
+    intervalEl.textContent = getIntervalDisplayText(startIso, endIso);
+  }
+
+  function getPracticeIndicatorText() {
+    return `Баллы: ${activePracticeMin} — ${activePracticeMax} | ${getIntervalDisplayText(activePracticeStartDate, activePracticeEndDate)}`;
+  }
+
+  function setFilledState(inputEl) {
+    if (!inputEl) return;
+    const hasValue = String(inputEl.value ?? '').trim() !== '';
+    inputEl.classList.toggle('filled', hasValue);
+  }
+
+  function refreshRowFilledState(studentId) {
+    const row = document.querySelector(`.student-row[data-student-id="${studentId}"]`);
+    if (!row) return;
+    setFilledState(row.querySelector('input.score-input'));
+    setFilledState(row.querySelector('input.comment-input'));
   }
 
   function reinitTooltips(rootEl) {
@@ -346,6 +577,7 @@
     setTooltip(scoreInput, data.score_updated_at ? `Оценка изменена: ${formatTs(data.score_updated_at)}` : '');
     setTooltip(commentInput, data.comment_updated_at ? `Комментарий изменён: ${formatTs(data.comment_updated_at)}` : '');
 
+    refreshRowFilledState(studentId);
     reinitTooltips(row);
   }
 
@@ -363,8 +595,10 @@
     activePracticeId = Number(el.dataset.id);
     activePracticeMin = Number(el.dataset.min);
     activePracticeMax = Number(el.dataset.max);
+    activePracticeStartDate = normalizeIsoDate(el.dataset.start);
+    activePracticeEndDate = normalizeIsoDate(el.dataset.end);
 
-    setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+    setGlobalIndicator(null, getPracticeIndicatorText());
     reloadGrades();
   }
 
@@ -382,9 +616,24 @@
       .then(d => {
         if (!d.success) { area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка</div>'; return; }
 
+        if (d.practice) {
+          activePracticeMin = Number(d.practice.min_score ?? activePracticeMin);
+          activePracticeMax = Number(d.practice.max_score ?? activePracticeMax);
+          activePracticeStartDate = normalizeIsoDate(d.practice.start_date);
+          activePracticeEndDate = normalizeIsoDate(d.practice.end_date);
+
+          const activeChip = document.querySelector(`.practice-chip[data-id="${activePracticeId}"]`);
+          if (activeChip) {
+            activeChip.dataset.start = activePracticeStartDate || '';
+            activeChip.dataset.end = activePracticeEndDate || '';
+            renderChipInterval(activeChip, activePracticeStartDate, activePracticeEndDate);
+          }
+        }
+
         const rows = d.rows || [];
         if (!rows.length) {
           area.innerHTML = '<div class="text-center text-muted mt-5">В группе нет студентов</div>';
+          setGlobalIndicator(null, getPracticeIndicatorText());
           return;
         }
 
@@ -412,7 +661,7 @@
           const name = document.createElement('div');
           name.className = 'fw-semibold student-name';
           name.textContent = `${idx + 1}. ${r.fio}`;
-          name.title = 'Нажми, чтобы открыть статистику';
+          name.title = 'Нажмите, чтобы открыть статистику';
           name.addEventListener('click', () => openStudentStats(r.student_id, r.fio));
 
           left.appendChild(cb);
@@ -450,11 +699,25 @@
             comment.title = `Комментарий изменён: ${formatTs(r.comment_updated_at)}`;
           }
 
-          // Автосохранение
-          score.addEventListener('input', () => queueAutoSave(r.student_id, score.value, comment.value));
-          comment.addEventListener('input', () => queueAutoSave(r.student_id, score.value, comment.value));
-          score.addEventListener('blur', () => flushAutoSave(r.student_id, score.value, comment.value));
-          comment.addEventListener('blur', () => flushAutoSave(r.student_id, score.value, comment.value));
+          setFilledState(score);
+          setFilledState(comment);
+
+          score.addEventListener('input', () => {
+            setFilledState(score);
+            queueAutoSave(r.student_id, score.value, comment.value);
+          });
+          comment.addEventListener('input', () => {
+            setFilledState(comment);
+            queueAutoSave(r.student_id, score.value, comment.value);
+          });
+          score.addEventListener('blur', () => {
+            setFilledState(score);
+            flushAutoSave(r.student_id, score.value, comment.value);
+          });
+          comment.addEventListener('blur', () => {
+            setFilledState(comment);
+            flushAutoSave(r.student_id, score.value, comment.value);
+          });
 
           right.appendChild(score);
           right.appendChild(comment);
@@ -471,7 +734,7 @@
         reinitTooltips(area);
 
         document.getElementById('studentSearch').value = '';
-        setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+        setGlobalIndicator(null, getPracticeIndicatorText());
       })
       .catch(() => area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка сети</div>');
   }
@@ -522,7 +785,7 @@
       setGlobalIndicator('saved', 'Сохранено');
       setTimeout(() => {
         const el = document.getElementById('globalSaveIndicator');
-        if (el.classList.contains('saved')) setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`);
+        if (el.classList.contains('saved')) setGlobalIndicator(null, getPracticeIndicatorText());
       }, 900);
     })
     .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
@@ -548,7 +811,7 @@
       if (!d.success) { setGlobalIndicator('error', d.error || 'Ошибка'); return; }
       reloadGrades();
       setGlobalIndicator('saved', 'Применено');
-      setTimeout(() => setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`), 900);
+      setTimeout(() => setGlobalIndicator(null, getPracticeIndicatorText()), 900);
     })
     .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
   }
@@ -578,9 +841,92 @@
       if (!d.success) { setGlobalIndicator('error', d.error || 'Ошибка'); return; }
       reloadGrades();
       setGlobalIndicator('saved', 'Применено');
-      setTimeout(() => setGlobalIndicator(null, `Баллы: ${activePracticeMin} — ${activePracticeMax}`), 900);
+      setTimeout(() => setGlobalIndicator(null, getPracticeIndicatorText()), 900);
     })
     .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
+  }
+
+  function getIntervalModal() {
+    const modalEl = document.getElementById('practiceIntervalModal');
+    if (!modalEl) return null;
+    if (!intervalModalInstance) {
+      intervalModalInstance = new bootstrap.Modal(modalEl);
+    }
+    return intervalModalInstance;
+  }
+
+  function clearIntervalInputs() {
+    const startEl = document.getElementById('intervalStartDate');
+    const endEl = document.getElementById('intervalEndDate');
+    if (startEl) startEl.value = '';
+    if (endEl) endEl.value = '';
+  }
+
+  function openIntervalModal() {
+    if (!activePracticeId) {
+      alert('Сначала выберите задание');
+      return;
+    }
+    const startEl = document.getElementById('intervalStartDate');
+    const endEl = document.getElementById('intervalEndDate');
+    if (startEl) startEl.value = activePracticeStartDate || '';
+    if (endEl) endEl.value = activePracticeEndDate || '';
+
+    const modal = getIntervalModal();
+    if (modal) modal.show();
+  }
+
+  function saveGroupInterval() {
+    if (!activePracticeId) {
+      alert('Сначала выберите задание');
+      return;
+    }
+
+    const startEl = document.getElementById('intervalStartDate');
+    const endEl = document.getElementById('intervalEndDate');
+    const start_date = normalizeIsoDate(startEl ? startEl.value : '');
+    const end_date = normalizeIsoDate(endEl ? endEl.value : '');
+
+    if ((start_date && !end_date) || (!start_date && end_date)) {
+      alert('Укажите обе даты или оставьте обе пустыми');
+      return;
+    }
+
+    setGlobalIndicator('saving', 'Сохраняем интервал…');
+
+    fetch(`/api/practice/${activePracticeId}/group/${GROUP_ID}/interval`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({start_date, end_date})
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          setGlobalIndicator('error', d.error || 'Ошибка сохранения');
+          return;
+        }
+
+        const interval = d.interval || {};
+        activePracticeStartDate = normalizeIsoDate(interval.start_date);
+        activePracticeEndDate = normalizeIsoDate(interval.end_date);
+
+        const activeChip = document.querySelector(`.practice-chip[data-id="${activePracticeId}"]`);
+        if (activeChip) {
+          activeChip.dataset.start = activePracticeStartDate || '';
+          activeChip.dataset.end = activePracticeEndDate || '';
+          renderChipInterval(activeChip, activePracticeStartDate, activePracticeEndDate);
+        }
+
+        const modal = getIntervalModal();
+        if (modal) modal.hide();
+
+        setGlobalIndicator('saved', 'Интервал обновлён');
+        setTimeout(() => {
+          const el = document.getElementById('globalSaveIndicator');
+          if (el.classList.contains('saved')) setGlobalIndicator(null, getPracticeIndicatorText());
+        }, 900);
+      })
+      .catch(() => setGlobalIndicator('error', 'Ошибка сети'));
   }
 
   function filterStudents() {
@@ -591,7 +937,6 @@
     });
   }
 
-  // Статистика студента
   function openStudentStats(studentId, fio) {
     const title = document.getElementById('statsTitle');
     const body = document.getElementById('statsBody');
@@ -641,36 +986,11 @@
     new bootstrap.Modal(document.getElementById('studentStatsModal')).show();
   }
 
-  function updateThemeToggleButton() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
-    const icon = btn.querySelector('i');
-    if (!icon) return;
-    if (theme === 'dark') {
-      icon.className = 'bi bi-moon-stars';
-      btn.title = 'Тёмная тема';
-    } else {
-      icon.className = 'bi bi-sun';
-      btn.title = 'Светлая тема';
-    }
-  }
-
-  function initThemeToggle() {
-    const btn = document.getElementById('themeToggleBtn');
-    if (!btn) return;
-    updateThemeToggleButton();
-    btn.addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
-      const next = (cur === 'dark') ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-bs-theme', next);
-      localStorage.setItem('rs-theme', next);
-      updateThemeToggleButton();
-    });
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
-    initThemeToggle();
+    const firstChip = document.querySelector('#practiceChips .practice-chip');
+    if (firstChip) {
+      selectPractice(firstChip);
+    }
   });
 </script>
 

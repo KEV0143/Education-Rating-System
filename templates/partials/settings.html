@@ -1,0 +1,104 @@
+{% macro settings_button() -%}
+<button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#settingsModal" title="Настройки">
+  <i class="bi bi-gear"></i>
+</button>
+{%- endmacro %}
+
+{% macro settings_modal(app_version) -%}
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="settingsModalLabel">
+          <i class="bi bi-gear me-2"></i>Настройки
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-between align-items-center gap-3">
+          <span class="fw-semibold">Смена режима</span>
+          <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button" title="Тема">
+            <i class="bi bi-sun"></i>
+            <span class="ms-2" data-theme-toggle-label>Светлая</span>
+          </button>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="small text-muted">
+          <div class="mb-2">
+            <span class="fw-semibold text-body-emphasis">Версия приложения:</span>
+            <span>{{ app_version }}</span>
+          </div>
+          <div class="mb-2">
+            <span class="fw-semibold text-body-emphasis">Репозиторий проекта:</span>
+            <a href="https://github.com/KEV0143/Education-Rating-System" target="_blank" rel="noopener noreferrer">
+              github.com/KEV0143/Education-Rating-System
+            </a>
+          </div>
+          <div class="mb-2">
+            Программный комплекс разработан студентом кафедры прикладной математики
+            РТУ МИРЭА Климкиным Егором Владимировичем.
+          </div>
+          <div class="mb-0">
+            При обнаружении ошибок или наличии предложений по развитию проекта,
+            пожалуйста, свяжитесь через Telegram:
+            <a href="https://t.me/klimkinev" target="_blank" rel="noopener noreferrer">@klimkinev</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function (window, document) {
+    function updateThemeToggleButton() {
+      const btn = document.getElementById('themeToggleBtn');
+      if (!btn) return;
+
+      const theme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      const icon = btn.querySelector('i');
+      const label = btn.querySelector('[data-theme-toggle-label]');
+      if (!icon) return;
+
+      if (theme === 'dark') {
+        icon.className = 'bi bi-moon-stars';
+        btn.title = 'Тёмная тема';
+        if (label) label.textContent = 'Тёмная';
+      } else {
+        icon.className = 'bi bi-sun';
+        btn.title = 'Светлая тема';
+        if (label) label.textContent = 'Светлая';
+      }
+    }
+
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      const next = (cur === 'dark') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-bs-theme', next);
+      localStorage.setItem('rs-theme', next);
+      updateThemeToggleButton();
+    }
+
+    function initThemeToggle() {
+      const btn = document.getElementById('themeToggleBtn');
+      if (!btn) return;
+
+      updateThemeToggleButton();
+      if (btn.dataset.themeBound === '1') return;
+
+      btn.dataset.themeBound = '1';
+      btn.addEventListener('click', toggleTheme);
+    }
+
+    window.SettingsTheme = {
+      initThemeToggle,
+      updateThemeToggleButton,
+      toggleTheme,
+    };
+
+    document.addEventListener('DOMContentLoaded', initThemeToggle);
+  })(window, document);
+</script>
+{%- endmacro %}
