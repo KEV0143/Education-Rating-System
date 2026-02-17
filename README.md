@@ -23,7 +23,7 @@
 </p>
 
 <a href="https://vk.com/kafprimat" style="text-decoration: none;">
-  <img width="250" alt="LogoPM" src="https://github.com/user-attachments/assets/4d21d725-e3b8-474f-b0c3-dd0eab6a3365" />
+  <img width="250" alt="LogoPM" src="https://github.com/user-attachments/assets/c99b8ec6-c211-42b2-aac1-4dd37bc060d1" />
 </a>
 
 <br>
@@ -47,30 +47,31 @@
 <br>
 
 <div align="center">
-  <img width="850" alt="LogoMain" src="https://github.com/user-attachments/assets/bb9e03c5-91ac-4eab-a98d-ddc96c3a16ad" style="border-radius: 8px;" />
+  <img width="850" alt="LogoMain" src="https://github.com/user-attachments/assets/d7643856-eaff-45c4-a7bf-ed4532f3225b" style="border-radius: 8px;" />
   <p><code>Главный экран реализует первичный пользовательский интерфейс системы и включает приветственный блок, перечень дисциплин (например, «САБД», «ТИМО»). Реализован поиск и параметрическая фильтрация по атрибутам. </code></p>
 </div>
 
 <br>
 
 <div align="center">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/bd18699d-36c0-4698-86a0-2a78f85aaa91" style="border-radius: 8px;" />
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/d1f39402-c179-4092-8273-d13180144f40" style="border-radius: 8px;" />
   <p><code>Модуль администрирования базы данных студентов обеспечивает создание и ведение учебных групп, добавление студентов (по списку или вручную), а также редактирование и актуализацию существующих записей.</code></p>
 </div>
 
 <br>
 
 <div align="center">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/43f3c5a9-03bb-48fa-a14f-156b8f19b8db" style="border-radius: 8px;" />
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/4959d1df-57fb-461d-b854-65155ca28fd4" style="border-radius: 8px;" />
   <p><code>Интерфейс преподавателя предназначен для формирования практических работ и контрольных мероприятий. Задаются наименование задания, диапазон оценивания (минимальный/максимальный балл) и сроки выполнения.</code></p>
 </div>
 
 <br>
 
 <div align="center">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/6b7697e3-3f98-49a7-a754-a07d6f1d2655" style="border-radius: 8px;" />
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/3481ec23-3ce5-4ab8-8bb6-3c9934b2dce6" style="border-radius: 8px;" />
   <p><code>Рабочее место преподавателя для оценивания результатов выполнения заданий: выполняется выбор задания и внесение баллов и комментариев для студентов выбранной учебной группы.</code></p>
 </div>
+
 
 <br>
 
