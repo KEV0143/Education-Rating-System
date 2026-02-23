@@ -3,10 +3,12 @@ import secrets
 import threading
 import webbrowser
 
-from flask import Flask
+from flask import Flask, redirect, url_for
 from utils.course_routes import register_course_routes
 from utils.excel_export import register_excel_export_routes
 from utils.image_store import migrate_legacy_course_images
+from utils.journal_models import init_journal_models
+from utils.journal_routes import register_journal_routes
 from utils.practice_models import init_practice_models
 from utils.practice_routes import register_practice_routes
 from utils.app_routes import register_app_routes
@@ -36,7 +38,7 @@ from utils.runtime_env import (
 )
 from utils.update_service import UpdateService
 
-APP_VERSION = "v1.0.3"
+APP_VERSION = "v1.0.4"
 APP_DIR_NAME = "EducationRatingSystem"
 DEFAULT_APP_HOST = "127.0.0.1"
 DEFAULT_APP_PORT = 54791
@@ -89,6 +91,7 @@ register_app_routes(
 )
 
 Practice, PracticeGrade, PracticeGroupInterval = init_practice_models(db)
+JournalLesson, JournalLessonSession, JournalAttendance = init_journal_models(db)
 
 with app.app_context():
     db.create_all()
@@ -119,7 +122,24 @@ register_practice_routes(
     parse_group_ids,
 )
 
+register_journal_routes(
+    app,
+    db,
+    Course,
+    Group,
+    Student,
+    JournalLesson,
+    JournalLessonSession,
+    JournalAttendance,
+    parse_int,
+)
+
 register_excel_export_routes(app, db, Course, Group, Student, Practice, PracticeGrade, parse_group_ids)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    return redirect(url_for("static", filename="iconkev.ico"), code=302)
 
 
 _BROWSER_OPENED = False

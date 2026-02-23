@@ -135,9 +135,9 @@
         <div class="d-flex align-items-center flex-wrap gap-2">
             {{ settings_button() }}
 
-            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#archiveModal">
-                <i class="bi bi-archive"></i> Архив
-            </button>
+            <a class="btn btn-outline-primary" href="{{ url_for('journal_page') }}">
+                <i class="bi bi-journal-bookmark-fill"></i> Журнал
+            </a>
 
             <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#studentsModal">
                 <i class="bi bi-people-fill"></i> База студентов
@@ -316,7 +316,7 @@
 
 </div>
 
-{{ settings_modal(app_version) }}
+{{ settings_modal(app_version, show_archive=true, archive_target="#archiveModal") }}
 <div class="modal fade" id="manageModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">

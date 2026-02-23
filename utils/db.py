@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, List, Optional, Set
 
@@ -171,6 +171,18 @@ def _sqlite_columns(table: str) -> Set[str]:
         return set()
 
 
+def _semester_key_for_date(value: date) -> Optional[str]:
+    month = int(value.month)
+    year = int(value.year)
+    if month in (9, 10, 11, 12):
+        return f"{year}-{year + 1}:1"
+    if month == 1:
+        return f"{year - 1}-{year}:1"
+    if month in (2, 3, 4, 5, 6):
+        return f"{year - 1}-{year}:2"
+    return None
+
+
 def ensure_schema() -> None:
     cols = _sqlite_columns("course")
     if cols and "archived" not in cols:
@@ -209,6 +221,92 @@ def ensure_schema() -> None:
                     "WHERE comment_updated_at IS NULL AND COALESCE(comment,'') <> ''"
                 )
             )
+
+    cols_j = _sqlite_columns("journal_lesson")
+    if cols_j and "semester_key" not in cols_j:
+        db.session.execute(text("ALTER TABLE journal_lesson ADD COLUMN semester_key VARCHAR(16)"))
+        active_semester = _semester_key_for_date(datetime.utcnow().date())
+        if not active_semester:
+            now = datetime.utcnow().date()
+            active_semester = f"{now.year}-{now.year + 1}:1"
+        db.session.execute(
+            text("UPDATE journal_lesson SET semester_key = :semester_key WHERE COALESCE(semester_key, '') = ''"),
+            {"semester_key": active_semester},
+        )
+
+    cols_j2 = _sqlite_columns("journal_lesson")
+    if cols_j2 and "room" not in cols_j2:
+        db.session.execute(text("ALTER TABLE journal_lesson ADD COLUMN room VARCHAR(40) NOT NULL DEFAULT ''"))
+
+    if cols_j2 and "group_ids" not in cols_j2:
+        db.session.execute(text("ALTER TABLE journal_lesson ADD COLUMN group_ids VARCHAR(500) NOT NULL DEFAULT ''"))
+        db.session.execute(
+            text(
+                "UPDATE journal_lesson "
+                "SET group_ids = CAST(group_id AS TEXT) "
+                "WHERE COALESCE(group_ids, '') = ''"
+            )
+        )
+    elif cols_j2 and "group_ids" in cols_j2:
+        db.session.execute(
+            text(
+                "UPDATE journal_lesson "
+                "SET group_ids = CAST(group_id AS TEXT) "
+                "WHERE COALESCE(group_ids, '') = ''"
+            )
+        )
+
+    cols_js = _sqlite_columns("journal_lesson_session")
+    if cols_js:
+        if "qr_token" not in cols_js:
+            db.session.execute(
+                text("ALTER TABLE journal_lesson_session ADD COLUMN qr_token VARCHAR(96) NOT NULL DEFAULT ''")
+            )
+        cols_js2 = _sqlite_columns("journal_lesson_session")
+        if "qr_token_created_at" not in cols_js2:
+            db.session.execute(text("ALTER TABLE journal_lesson_session ADD COLUMN qr_token_created_at DATETIME"))
+
+    cols_ja = _sqlite_columns("journal_attendance")
+    if cols_ja:
+        if "status" not in cols_ja:
+            db.session.execute(
+                text(
+                    "ALTER TABLE journal_attendance ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'absent'"
+                )
+            )
+        cols_ja2 = _sqlite_columns("journal_attendance")
+        if "source" not in cols_ja2:
+            db.session.execute(
+                text(
+                    "ALTER TABLE journal_attendance ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'manual'"
+                )
+            )
+        cols_ja3 = _sqlite_columns("journal_attendance")
+        if "source_ip" not in cols_ja3:
+            db.session.execute(
+                text(
+                    "ALTER TABLE journal_attendance ADD COLUMN source_ip VARCHAR(64) NOT NULL DEFAULT ''"
+                )
+            )
+        cols_ja4 = _sqlite_columns("journal_attendance")
+        if "marked_at" not in cols_ja4:
+            db.session.execute(text("ALTER TABLE journal_attendance ADD COLUMN marked_at DATETIME"))
+        cols_ja5 = _sqlite_columns("journal_attendance")
+        if "marked_at" in cols_ja5:
+            if "updated_at" in cols_ja5:
+                db.session.execute(
+                    text(
+                        "UPDATE journal_attendance "
+                        "SET marked_at = COALESCE(marked_at, updated_at, CURRENT_TIMESTAMP)"
+                    )
+                )
+            else:
+                db.session.execute(
+                    text(
+                        "UPDATE journal_attendance "
+                        "SET marked_at = COALESCE(marked_at, CURRENT_TIMESTAMP)"
+                    )
+                )
 
     db.session.commit()
 

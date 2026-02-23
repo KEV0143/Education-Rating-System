@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Занятие | {{ course.title }}</title>
+
+  <script>
+    (() => {
+      const saved = localStorage.getItem('rs-theme');
+      const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    :root{
+      --rs-page-bg: #f8f9fa;
+      --rs-text: #333;
+      --rs-card-bg: #ffffff;
+      --rs-border: #eee;
+      --rs-soft-border: #dee2e6;
+      --rs-shadow: rgba(0,0,0,0.03);
+      --rs-hover-bg: #f1f3f5;
+    }
+    :root[data-bs-theme="dark"]{
+      --rs-page-bg: #0f1216;
+      --rs-text: #e9ecef;
+      --rs-card-bg: #151a21;
+      --rs-border: rgba(255,255,255,0.08);
+      --rs-soft-border: rgba(255,255,255,0.14);
+      --rs-shadow: rgba(0,0,0,0.35);
+      --rs-hover-bg: rgba(255,255,255,0.06);
+    }
+
+    body {
+      background-color: var(--rs-page-bg);
+      color: var(--rs-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .panel-card {
+      border-radius: 12px;
+      box-shadow: 0 2px 5px var(--rs-shadow);
+      border: 1px solid var(--rs-border);
+      background: var(--rs-card-bg);
+    }
+    .students-table-wrap {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .muted-line {
+      color: #6c757d;
+      font-size: .9rem;
+      line-height: 1.3;
+    }
+    :root[data-bs-theme="dark"] .muted-line {
+      color: rgba(255,255,255,0.68);
+    }
+    .summary-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .summary-label {
+      font-size: .82rem;
+      color: #6c757d;
+      margin-bottom: 6px;
+    }
+    :root[data-bs-theme="dark"] .summary-label {
+      color: rgba(255,255,255,0.68);
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 136px;
+      min-width: 136px;
+      max-width: 136px;
+      padding: 2px 5px;
+      border-radius: 8px;
+      font-size: .68rem;
+      font-weight: 500;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-present {
+      background: rgba(25,135,84,.14);
+      border-color: rgba(25,135,84,.35);
+      color: #198754;
+    }
+    .status-absent {
+      background: rgba(220,53,69,.13);
+      border-color: rgba(220,53,69,.3);
+      color: #dc3545;
+    }
+    .status-excused {
+      background: rgba(255,193,7,.18);
+      border-color: rgba(255,193,7,.35);
+      color: #8a6d00;
+    }
+    .qr-box {
+      border: 1px dashed var(--rs-soft-border);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      min-height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,.4);
+    }
+    :root[data-bs-theme="dark"] .qr-box {
+      background: rgba(255,255,255,.03);
+    }
+    .qr-image {
+      width: min(100%, 300px);
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--rs-soft-border);
+      background: #fff;
+    }
+    .qr-marks-list {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      min-height: 220px;
+      max-height: 320px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      overscroll-behavior: contain;
+      background: rgba(255,255,255,.35);
+    }
+    :root[data-bs-theme="dark"] .qr-marks-list {
+      background: rgba(255,255,255,.02);
+    }
+    .qr-mark-row {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--rs-soft-border);
+      font-size: .86rem;
+    }
+    .qr-mark-row:last-child {
+      border-bottom: none;
+    }
+    .qr-mark-meta {
+      color: #6c757d;
+      font-size: .78rem;
+      line-height: 1.25;
+    }
+    :root[data-bs-theme="dark"] .qr-mark-meta {
+      color: rgba(255,255,255,0.7);
+    }
+    #lessonStudentsTable {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: .93rem;
+    }
+    #lessonStudentsTable .student-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: .78rem;
+      font-weight: 400;
+    }
+    #lessonStudentsTable thead th {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #6c757d;
+      white-space: nowrap;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-weight: 600;
+      padding-top: .82rem;
+      padding-bottom: .72rem;
+    }
+    :root[data-bs-theme="dark"] #lessonStudentsTable thead th {
+      color: rgba(255,255,255,0.7);
+    }
+    #lessonStudentsTable thead th:first-child,
+    #lessonStudentsTable tbody td:first-child {
+      padding-left: .92rem;
+      text-align: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: .78rem;
+    }
+    #lessonStudentsTable thead th:nth-child(2),
+    #lessonStudentsTable tbody td:nth-child(2) {
+      padding-left: .6rem;
+    }
+    .ip-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: .78rem;
+    }
+    .mono-cell {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: .78rem;
+    }
+    .qr-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-end;
+      margin-left: auto;
+    }
+    .qr-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .qr-actions-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      text-align: right;
+    }
+    .qr-checkin-counter {
+      font-size: .82rem;
+      color: #6c757d;
+      text-align: center;
+      margin-top: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    :root[data-bs-theme="dark"] .qr-checkin-counter {
+      color: rgba(255,255,255,0.72);
+    }
+    .mark-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--rs-soft-border);
+      background: var(--rs-card-bg);
+      color: #687788;
+      font-size: .80rem;
+      font-weight: 500;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color .16s ease, box-shadow .16s ease, color .16s ease, background-color .16s ease;
+    }
+    .mark-btn:hover {
+      border-color: rgba(13,110,253,.35);
+      color: #4f77c6;
+      box-shadow: 0 0 0 2px rgba(13,110,253,.08);
+    }
+    .mark-btn.is-active {
+      border-color: rgba(13,110,253,.38);
+      background: rgba(13,110,253,.08);
+      color: #4f77c6;
+      box-shadow: 0 0 0 1px rgba(13,110,253,.08);
+    }
+
+    :root[data-bs-theme="dark"] .table,
+    :root[data-bs-theme="dark"] .table td,
+    :root[data-bs-theme="dark"] .table th {
+      color: var(--rs-text);
+      border-color: var(--rs-soft-border);
+    }
+    :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
+  </style>
+</head>
+<body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
+{% set day_names = {1:'Понедельник', 2:'Вторник', 3:'Среда', 4:'Четверг', 5:'Пятница', 6:'Суббота'} %}
+
+<div class="container py-4" id="lessonPageRoot" data-lesson-id="{{ lesson.id }}" data-lesson-date="{{ lesson_date_iso }}">
+  <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <a href="{{ url_for('journal_page', date=lesson_date_iso) }}" class="btn btn-outline-secondary btn-sm mb-2 d-inline-flex align-items-center gap-1">
+        <i class="bi bi-arrow-left"></i> Назад к журналу
+      </a>
+      <h2 class="m-0 fw-bold">{{ course.title }}</h2>
+      <div class="muted-line mt-1">Группа: {{ group_names_display }} | Аудитория: {{ lesson.room }} | {{ pair_info.label }} {% if pair_info.time %}| {{ pair_info.time }}{% endif %}</div>
+      <div class="muted-line">{{ day_names.get(lesson.day_of_week, '-') }}, {{ lesson_date_iso }} | Неделя {{ lesson_ctx.week_number }} ({{ 'I нечётная' if lesson_ctx.week_parity == 'I' else 'II чётная' }})</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      {{ settings_button() }}
+    </div>
+  </div>
+
+  <div id="lessonMessage" class="alert d-none py-2"></div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="mb-3">
+        {% for category, message in messages %}
+          {% set class_name = 'alert-success' if category == 'success' else ('alert-warning' if category == 'warning' else 'alert-danger') %}
+          <div class="alert {{ class_name }} py-2 mb-2">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if lesson_tabs and (lesson_tabs|length) > 1 %}
+    <div class="panel-card p-2 mb-3">
+      <div class="small text-muted px-2 pt-1">Группы занятия</div>
+      <div class="d-flex flex-wrap gap-1 p-2">
+        {% for tab in lesson_tabs %}
+          <a
+            href="{{ url_for('journal_lesson_page', lesson_id=tab.lesson_id, date=lesson_date_iso, group_id=tab.group_id) }}"
+            class="btn btn-sm {{ 'btn-primary' if tab.is_active else 'btn-outline-secondary' }}"
+          >
+            {{ tab.group_name }} <span class="opacity-75">({{ tab.student_count }})</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-3">
+    <div class="col-xl-5">
+      <div class="panel-card p-3 h-100">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+          <div class="h5 m-0 fw-bold">QR-отметка</div>
+          <div class="qr-actions">
+            <div class="qr-actions-row">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="openPublicQrBtn">
+                <i class="bi bi-broadcast me-1"></i>Открыть
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="closePublicQrBtn">
+                <i class="bi bi-x-octagon me-1"></i>Закрыть
+              </button>
+            </div>
+            <div class="qr-actions-row">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="regenerateQrBtn">
+                <i class="bi bi-arrow-clockwise me-1"></i>Обновить QR
+              </button>
+              <a
+                href="{{ url_for('journal_lesson_qr_view_page', lesson_id=lesson.id, date=lesson_date_iso, group_id=active_group_id) }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-sm btn-outline-dark"
+              >
+                <i class="bi bi-box-arrow-up-right me-1"></i>QR во вкладке
+              </a>
+            </div>
+            <div class="qr-actions-meta small">
+              <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
+                <span class="fw-semibold">Статус:</span>
+                <span id="tunnelStatusBadge" class="badge mono-cell {{ 'text-bg-success' if tunnel.active else 'text-bg-secondary' }}">{{ 'PUBLIC ACTIVE' if tunnel.active else 'LOCAL ONLY' }}</span>
+                <span id="tunnelReconnectBadge" class="badge text-bg-warning {% if not tunnel.reconnecting %}d-none{% endif %}">Переподключение...</span>
+              </div>
+              <div class="text-muted">
+                До обновления ссылки:
+                <span id="tunnelRefreshTimer" data-next-refresh="{{ tunnel.next_refresh_epoch if tunnel.next_refresh_epoch else '' }}" data-refresh-interval="{{ tunnel.refresh_interval_seconds if tunnel.refresh_interval_seconds else '' }}">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="qr-box mb-2">
+          {% if qr_data_uri %}
+            <img src="{{ qr_data_uri }}" alt="QR код для отметки" class="qr-image" id="lessonQrImage">
+          {% else %}
+            <img src="" alt="QR код для отметки" class="qr-image d-none" id="lessonQrImage">
+            <div class="text-muted" id="qrEmptyText">QR доступен только при статусе PUBLIC ACTIVE<span class="d-block">(Для включения статуса Public нажмите кнопку "Открыть")</span></div>
+          {% endif %}
+        </div>
+        <div class="qr-checkin-counter" id="qrCheckinCounter">Отметилось: {{ overall_summary.present_count }} из {{ overall_summary.total_students }}</div>
+
+        <div id="qrErrorBox" class="alert alert-warning py-2 mb-2 {% if not qr_error %}d-none{% endif %}">{{ qr_error }}</div>
+
+        <div id="checkinLinkBox" class="{% if not effective_checkin_url %}d-none{% endif %}">
+          <div class="small text-muted mb-1">Ссылка для отметки:</div>
+          <div class="small text-break mb-0">
+            <a id="effectiveCheckinUrl" href="{{ effective_checkin_url if effective_checkin_url else '#' }}" target="_blank" rel="noopener noreferrer">{{ effective_checkin_url if effective_checkin_url else '-' }}</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="panel-card p-3 h-100">
+        <h5 class="m-0 fw-bold mb-3">Сводка посещаемости: {{ group.name }}</h5>
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <div class="border rounded-3 p-2 h-100">
+              <div class="summary-label">Студентов</div>
+              <div class="summary-value" id="summaryTotal">{{ summary.total_students }}</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="border rounded-3 p-2 h-100">
+              <div class="summary-label">Присутствовало</div>
+              <div class="summary-value text-success" id="summaryPresent">{{ summary.present_count }}</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="border rounded-3 p-2 h-100">
+              <div class="summary-label">Отсутствовало</div>
+              <div class="summary-value text-danger" id="summaryAbsent">{{ summary.absent_count }}</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="border rounded-3 p-2 h-100">
+              <div class="summary-label">Отсутствовало (уваж.)</div>
+              <div class="summary-value text-warning-emphasis" id="summaryExcused">{{ summary.excused_count }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="summary-label mb-2">Последние отметки</div>
+          <div class="qr-marks-list" id="qrMarksList">
+            {% if qr_marks %}
+              {% for mark in qr_marks %}
+                <div class="qr-mark-row">
+                  <div class="fw-semibold">{{ mark.fio }}</div>
+                  <div class="qr-mark-meta">{{ mark.marked_at_display }} | {{ mark.source_label }} | {{ mark.status_label }}{% if mark.source_ip %} | IP: {{ mark.source_ip }}{% endif %}</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="qr-mark-row text-muted">Пока нет отметок</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-card p-3">
+    <h5 class="m-0 fw-bold mb-3">Студенты группы</h5>
+
+    {% if student_rows %}
+      <div class="table-responsive students-table-wrap mt-2">
+        <table class="table table-sm align-middle mb-0" id="lessonStudentsTable">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Студент</th>
+              <th style="width: 156px;">Статус</th>
+              <th style="width: 110px;">Источник</th>
+              <th style="width: 140px;">IP</th>
+              <th style="width: 210px;">Отмечено</th>
+              <th style="width: 260px;">Изменить</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in student_rows %}
+              <tr data-student-id="{{ row.id }}">
+                <td>{{ row.index }}</td>
+                <td class="student-name">{{ row.fio }}</td>
+                <td class="ps-1">
+                  <span data-role="status-chip" title="{{ row.status_label }}" class="status-chip {% if row.status == 'present' %}status-present{% elif row.status == 'excused' %}status-excused{% else %}status-absent{% endif %}">
+                    {{ row.status_label }}
+                  </span>
+                </td>
+                <td class="mono-cell" data-role="source-cell">{{ 'QR' if row.source == 'qr' else ('Локально' if row.source == 'manual' else '-') }}</td>
+                <td class="ip-cell" data-role="ip-cell">{{ row.source_ip if row.source_ip else '-' }}</td>
+                <td class="mono-cell" data-role="marked-cell">{{ row.marked_at_display if row.marked_at_display else '-' }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('journal_set_attendance', lesson_id=lesson.id) }}" class="d-flex flex-wrap gap-1 attendance-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="date" value="{{ lesson_date_iso }}">
+                    <input type="hidden" name="group_id" value="{{ active_group_id }}">
+                    <input type="hidden" name="student_id" value="{{ row.id }}">
+                    <button type="submit" name="status" value="present" title="Присутствовал" class="mark-btn {% if row.status == 'present' %}is-active{% endif %}">+</button>
+                    <button type="submit" name="status" value="absent" title="Отсутствовал" class="mark-btn {% if row.status == 'absent' %}is-active{% endif %}">-</button>
+                    <button type="submit" name="status" value="excused" title="Отсутствовал (уваж.)" class="mark-btn {% if row.status == 'excused' %}is-active{% endif %}">У</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center text-muted py-5">В группе пока нет студентов</div>
+    {% endif %}
+  </div>
+</div>
+
+{{ settings_modal(app_version) }}
+<script id="journalLessonBootstrap" type="application/json">
+  {{ {
+    "lesson_id": lesson.id,
+    "lesson_date": lesson_date_iso,
+    "active_group_id": active_group_id,
+    "csrf_token": csrf_token
+  } | tojson }}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const RAW_BOOTSTRAP = (document.getElementById('journalLessonBootstrap') || { textContent: '{}' }).textContent || '{}';
+  let LESSON_BOOTSTRAP = {};
+  try {
+    LESSON_BOOTSTRAP = JSON.parse(RAW_BOOTSTRAP);
+  } catch (_err) {
+    LESSON_BOOTSTRAP = {};
+  }
+
+  const LESSON_ID = Number(LESSON_BOOTSTRAP.lesson_id || 0);
+  const LESSON_DATE = String(LESSON_BOOTSTRAP.lesson_date || '');
+  const ACTIVE_GROUP_ID = Number(LESSON_BOOTSTRAP.active_group_id || 0);
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content') || '';
+
+  let tunnelNextRefresh = 0;
+  let tunnelRefreshInterval = 0;
+  let attendanceStream = null;
+  let tunnelStream = null;
+  let attendancePollTimer = null;
+  let qrPollTimer = null;
+  let pollingFallbackEnabled = false;
+
+  function setLessonMessage(text, type) {
+    const box = document.getElementById('lessonMessage');
+    if (!box) return;
+
+    if (!text) {
+      box.className = 'alert d-none py-2';
+      box.textContent = '';
+      return;
+    }
+
+    const classMap = {
+      success: 'alert-success',
+      warning: 'alert-warning',
+      danger: 'alert-danger',
+      info: 'alert-info'
+    };
+    box.className = `alert ${classMap[type] || 'alert-info'} py-2`;
+    box.textContent = text;
+  }
+
+  function statusClass(status) {
+    if (status === 'present') return 'status-chip status-present';
+    if (status === 'excused') return 'status-chip status-excused';
+    return 'status-chip status-absent';
+  }
+
+  function sourceLabel(source) {
+    if (source === 'qr') return 'QR';
+    if (source === 'manual') return 'Локально';
+    return '-';
+  }
+
+  function renderQrCheckinSummary(summary) {
+    const counter = document.getElementById('qrCheckinCounter');
+    if (!counter) return;
+    const safe = summary || {};
+    const presentCount = Number(safe.present_count || 0);
+    const totalStudents = Number(safe.total_students || 0);
+    counter.textContent = `Отметилось: ${presentCount} из ${totalStudents}`;
+  }
+
+  function renderQrMarks(qrMarks) {
+    const container = document.getElementById('qrMarksList');
+    if (!container) return;
+    const previousScroll = container.scrollTop;
+    const wasNearBottom = (container.scrollHeight - container.clientHeight - container.scrollTop) < 10;
+    const items = Array.isArray(qrMarks) ? qrMarks : [];
+    if (!items.length) {
+      container.innerHTML = '<div class="qr-mark-row text-muted">Пока нет отметок</div>';
+      container.scrollTop = 0;
+      return;
+    }
+
+    container.innerHTML = '';
+    items.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'qr-mark-row';
+
+      const name = document.createElement('div');
+      name.className = 'fw-semibold';
+      name.textContent = String(item.fio || '-');
+
+      const meta = document.createElement('div');
+      meta.className = 'qr-mark-meta';
+      const ip = String(item.source_ip || '').trim();
+      const time = String(item.marked_at_display || '-');
+      const source = String(item.source_label || sourceLabel(item.source || ''));
+      const status = String(item.status_label || '-');
+      meta.textContent = ip ? `${time} | ${source} | ${status} | IP: ${ip}` : `${time} | ${source} | ${status}`;
+
+      row.appendChild(name);
+      row.appendChild(meta);
+      container.appendChild(row);
+    });
+
+    if (wasNearBottom) {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      container.scrollTop = previousScroll;
+    }
+  }
+
+  function applyAttendancePayload(attendance) {
+    if (!attendance) return;
+
+    const summary = attendance.summary || {};
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(value);
+    };
+
+    setText('summaryTotal', Number(summary.total_students || 0));
+    setText('summaryPresent', Number(summary.present_count || 0));
+    setText('summaryAbsent', Number(summary.absent_count || 0));
+    setText('summaryExcused', Number(summary.excused_count || 0));
+    renderQrCheckinSummary(attendance.overall_summary || summary);
+    renderQrMarks(attendance.qr_marks || []);
+
+    const items = Array.isArray(attendance.students) ? attendance.students : [];
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+
+    document.querySelectorAll('#lessonStudentsTable tbody tr[data-student-id]').forEach((row) => {
+      const studentId = String(row.getAttribute('data-student-id') || '');
+      const item = byId.get(studentId);
+      if (!item) return;
+
+      const status = String(item.status || 'absent');
+      const statusLabel = String(item.status_label || 'Отсутствовал');
+
+      const chip = row.querySelector('[data-role="status-chip"]');
+      if (chip) {
+        chip.className = statusClass(status);
+        chip.textContent = statusLabel;
+        chip.title = statusLabel;
+      }
+
+      const sourceCell = row.querySelector('[data-role="source-cell"]');
+      if (sourceCell) {
+        sourceCell.textContent = sourceLabel(String(item.source || ''));
+      }
+
+      const ipCell = row.querySelector('[data-role="ip-cell"]');
+      if (ipCell) {
+        ipCell.textContent = String(item.source_ip || '-');
+      }
+
+      const markedCell = row.querySelector('[data-role="marked-cell"]');
+      if (markedCell) {
+        markedCell.textContent = String(item.marked_at_display || '-');
+      }
+
+      const btnPresent = row.querySelector('button[name="status"][value="present"]');
+      const btnAbsent = row.querySelector('button[name="status"][value="absent"]');
+      const btnExcused = row.querySelector('button[name="status"][value="excused"]');
+      if (btnPresent) btnPresent.className = `mark-btn ${status === 'present' ? 'is-active' : ''}`;
+      if (btnAbsent) btnAbsent.className = `mark-btn ${status === 'absent' ? 'is-active' : ''}`;
+      if (btnExcused) btnExcused.className = `mark-btn ${status === 'excused' ? 'is-active' : ''}`;
+    });
+  }
+
+  function applyTunnelState(tunnel) {
+    if (!tunnel) return;
+
+    const badge = document.getElementById('tunnelStatusBadge');
+    const reconnectBadge = document.getElementById('tunnelReconnectBadge');
+    if (badge) {
+      const active = Boolean(tunnel.active);
+      badge.className = `badge mono-cell ${active ? 'text-bg-success' : 'text-bg-secondary'}`;
+      badge.textContent = active ? 'PUBLIC ACTIVE' : 'LOCAL ONLY';
+    }
+
+    if (reconnectBadge) {
+      reconnectBadge.classList.toggle('d-none', !Boolean(tunnel.reconnecting));
+    }
+
+    tunnelNextRefresh = Number(tunnel.next_refresh_epoch || 0);
+    tunnelRefreshInterval = Number(tunnel.refresh_interval_seconds || 0);
+
+    const qrErrorBox = document.getElementById('qrErrorBox');
+    if (qrErrorBox) {
+      const msg = String(tunnel.error_message || '');
+      if (msg) {
+        qrErrorBox.classList.remove('d-none');
+        qrErrorBox.textContent = msg;
+      } else if (!qrErrorBox.dataset.keepQrError) {
+        qrErrorBox.classList.add('d-none');
+        qrErrorBox.textContent = '';
+      }
+    }
+  }
+
+  function applyQrPayload(qr) {
+    if (!qr) return;
+
+    const setLink = (id, value) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const safe = String(value || '').trim();
+      el.textContent = safe || '-';
+      el.href = safe || '#';
+      return safe;
+    };
+
+    const effectiveUrl = setLink('effectiveCheckinUrl', qr.effective_checkin_url) || '';
+    const linkBox = document.getElementById('checkinLinkBox');
+    if (linkBox) {
+      linkBox.classList.toggle('d-none', !effectiveUrl);
+    }
+
+      const img = document.getElementById('lessonQrImage');
+      const empty = document.getElementById('qrEmptyText');
+      const qrData = String(qr.qr_data_uri || '').trim();
+      if (img) {
+        if (qrData) {
+          img.src = qrData;
+          img.classList.remove('d-none');
+          if (empty) empty.classList.add('d-none');
+        } else {
+          img.src = '';
+          img.classList.add('d-none');
+          if (empty) {
+            empty.innerHTML = 'QR доступен только при статусе PUBLIC ACTIVE<span class="d-block">(Для включения статуса Public нажмите кнопку "Открыть")</span>';
+            empty.classList.remove('d-none');
+          }
+        }
+      }
+
+    const qrErrorBox = document.getElementById('qrErrorBox');
+    const qrError = String(qr.qr_error || '');
+    if (qrErrorBox) {
+      if (qrError) {
+        qrErrorBox.classList.remove('d-none');
+        qrErrorBox.textContent = qrError;
+        qrErrorBox.dataset.keepQrError = '1';
+      } else {
+        qrErrorBox.classList.add('d-none');
+        qrErrorBox.textContent = '';
+        qrErrorBox.dataset.keepQrError = '';
+      }
+    }
+
+    renderQrCheckinSummary(qr.checkin_summary || {});
+    applyTunnelState(qr.tunnel || {});
+  }
+
+  async function refreshAttendanceState() {
+    if (!LESSON_ID || !LESSON_DATE) return;
+    try {
+      const response = await fetch(`/api/journal/lesson/${LESSON_ID}/attendance?date=${encodeURIComponent(LESSON_DATE)}&group_id=${encodeURIComponent(String(ACTIVE_GROUP_ID || 0))}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) return;
+      applyAttendancePayload(data.attendance || {});
+    } catch (_err) {
+    }
+  }
+
+  async function refreshQrState() {
+    if (!LESSON_ID || !LESSON_DATE) return;
+    try {
+      const response = await fetch(`/api/journal/lesson/${LESSON_ID}/qr?date=${encodeURIComponent(LESSON_DATE)}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) return;
+      applyQrPayload(data.qr || {});
+    } catch (_err) {
+    }
+  }
+
+  function ensurePollingFallback() {
+    if (pollingFallbackEnabled) return;
+    pollingFallbackEnabled = true;
+    if (!attendancePollTimer) {
+      attendancePollTimer = setInterval(refreshAttendanceState, 5000);
+    }
+    if (!qrPollTimer) {
+      qrPollTimer = setInterval(refreshQrState, 7000);
+    }
+  }
+
+  function stopPollingFallback() {
+    pollingFallbackEnabled = false;
+    if (attendancePollTimer) {
+      clearInterval(attendancePollTimer);
+      attendancePollTimer = null;
+    }
+    if (qrPollTimer) {
+      clearInterval(qrPollTimer);
+      qrPollTimer = null;
+    }
+  }
+
+  function renderRefreshTimer() {
+    const el = document.getElementById('tunnelRefreshTimer');
+    if (!el) return;
+
+    if (!tunnelNextRefresh || !tunnelRefreshInterval) {
+      el.textContent = '-';
+      return;
+    }
+
+    const sec = Math.ceil(tunnelNextRefresh - Date.now() / 1000);
+    if (sec <= 0) {
+      el.textContent = '00:00';
+      return;
+    }
+
+    const hh = Math.floor(sec / 3600);
+    const mm = Math.floor((sec % 3600) / 60);
+    const ss = sec % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    el.textContent = hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+  }
+
+  async function runTunnelAction(url, buttonId, okText) {
+    const btn = document.getElementById(buttonId);
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ lesson_id: LESSON_ID, date: LESSON_DATE }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        const errorText = (data && (data.error || data.message))
+          ? (data.error || data.message)
+          : 'Операция не выполнена';
+        setLessonMessage(errorText, 'danger');
+        return;
+      }
+
+      setLessonMessage((data && data.message) ? data.message : okText, 'success');
+      if (data && data.qr) {
+        applyQrPayload(data.qr);
+      } else {
+        await refreshQrState();
+      }
+    } catch (_err) {
+      setLessonMessage('Ошибка сети', 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
+    }
+  }
+
+  async function regenerateQr() {
+    const btn = document.getElementById('regenerateQrBtn');
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    try {
+      const form = new FormData();
+      form.append('date', LESSON_DATE);
+      form.append('csrf_token', CSRF_TOKEN);
+
+      const response = await fetch(`/journal/lesson/${LESSON_ID}/qr/regenerate`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        body: form,
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setLessonMessage((data && data.error) ? data.error : 'Не удалось обновить QR', 'danger');
+        return;
+      }
+
+      setLessonMessage('QR-ссылка обновлена', 'success');
+      if (data && data.qr) {
+        applyQrPayload(data.qr);
+      } else {
+        await refreshQrState();
+      }
+    } catch (_err) {
+      setLessonMessage('Ошибка сети', 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
+    }
+  }
+
+  function bindAttendanceForms() {
+    document.querySelectorAll('form.attendance-form').forEach((form) => {
+      if (form.dataset.bound === '1') return;
+      form.dataset.bound = '1';
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitter = event.submitter || null;
+
+        const buttons = Array.from(form.querySelectorAll('button[type="submit"]'));
+        buttons.forEach((btn) => { btn.disabled = true; });
+
+        try {
+          const formData = new FormData(form);
+          if (submitter && submitter.name && !formData.has(submitter.name)) {
+            formData.append(submitter.name, submitter.value);
+          }
+
+          const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json',
+            },
+            body: formData,
+          });
+
+          const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+          const isJson = contentType.includes('application/json');
+          const data = isJson ? await response.json() : { success: response.ok };
+          if (!response.ok || !data.success) {
+            setLessonMessage((data && data.error) ? data.error : 'Не удалось сохранить отметку', 'danger');
+            return;
+          }
+
+          if (isJson && data.attendance) {
+            applyAttendancePayload(data.attendance);
+          } else {
+            await refreshAttendanceState();
+          }
+          setLessonMessage('Отметка сохранена', 'success');
+        } catch (_err) {
+          setLessonMessage('Ошибка сети', 'danger');
+        } finally {
+          buttons.forEach((btn) => { btn.disabled = false; });
+        }
+      });
+    });
+  }
+
+  function connectAttendanceStream() {
+    if (!LESSON_ID || !LESSON_DATE) return;
+    if (!window.EventSource) {
+      ensurePollingFallback();
+      return;
+    }
+    attendanceStream = new EventSource(`/stream/journal/lesson/${LESSON_ID}/${encodeURIComponent(LESSON_DATE)}/attendance?group_id=${encodeURIComponent(String(ACTIVE_GROUP_ID || 0))}`);
+    attendanceStream.addEventListener('attendance', (event) => {
+      try {
+        const data = JSON.parse(event.data || '{}');
+        applyAttendancePayload(data);
+      } catch (_err) {
+      }
+    });
+    attendanceStream.onerror = () => {
+      if (attendanceStream && attendanceStream.readyState === 2) {
+        attendanceStream.close();
+        attendanceStream = null;
+        ensurePollingFallback();
+      }
+    };
+  }
+
+  function connectTunnelStream() {
+    if (!window.EventSource) {
+      ensurePollingFallback();
+      return;
+    }
+    tunnelStream = new EventSource(
+      `/stream/journal/tunnel?lesson_id=${encodeURIComponent(String(LESSON_ID || 0))}&date=${encodeURIComponent(LESSON_DATE)}`
+    );
+    tunnelStream.addEventListener('state', async (event) => {
+      try {
+        const data = JSON.parse(event.data || '{}');
+        applyTunnelState(data || {});
+        await refreshQrState();
+      } catch (_err) {
+      }
+    });
+    tunnelStream.onerror = () => {
+      if (tunnelStream && tunnelStream.readyState === 2) {
+        tunnelStream.close();
+        tunnelStream = null;
+        ensurePollingFallback();
+      }
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    bindAttendanceForms();
+
+    const openBtn = document.getElementById('openPublicQrBtn');
+    const closeBtn = document.getElementById('closePublicQrBtn');
+    const regenBtn = document.getElementById('regenerateQrBtn');
+
+    if (openBtn) openBtn.addEventListener('click', () => runTunnelAction('/api/journal/qr/open', 'openPublicQrBtn', 'Публичный QR открыт'));
+    if (closeBtn) closeBtn.addEventListener('click', () => runTunnelAction('/api/journal/qr/close', 'closePublicQrBtn', 'Публичный QR закрыт'));
+    if (regenBtn) regenBtn.addEventListener('click', regenerateQr);
+
+    renderRefreshTimer();
+    setInterval(renderRefreshTimer, 1000);
+
+    connectAttendanceStream();
+    connectTunnelStream();
+    if (!window.EventSource) {
+      ensurePollingFallback();
+    }
+    await refreshAttendanceState();
+    await refreshQrState();
+
+    window.addEventListener('beforeunload', () => {
+      if (attendanceStream) attendanceStream.close();
+      if (tunnelStream) tunnelStream.close();
+      stopPollingFallback();
+    });
+  });
+</script>
+</body>
+</html>

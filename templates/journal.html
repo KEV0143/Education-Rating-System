@@ -1,0 +1,2381 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Журнал занятий</title>
+
+  <script>
+    (() => {
+      const saved = localStorage.getItem('rs-theme');
+      const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    :root{
+      --rs-page-bg: #f8f9fa;
+      --rs-text: #333;
+      --rs-card-bg: #ffffff;
+      --rs-border: #eee;
+      --rs-soft-border: #dee2e6;
+      --rs-shadow: rgba(0,0,0,0.03);
+      --rs-hover-bg: #f1f3f5;
+      --rs-primary-soft: rgba(13,110,253,0.12);
+    }
+    :root[data-bs-theme="dark"]{
+      --rs-page-bg: #0f1216;
+      --rs-text: #e9ecef;
+      --rs-card-bg: #151a21;
+      --rs-border: rgba(255,255,255,0.08);
+      --rs-soft-border: rgba(255,255,255,0.14);
+      --rs-shadow: rgba(0,0,0,0.35);
+      --rs-hover-bg: rgba(255,255,255,0.06);
+      --rs-primary-soft: rgba(13,110,253,0.22);
+    }
+
+    body {
+      background-color: var(--rs-page-bg);
+      color: var(--rs-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .panel-card {
+      border-radius: 12px;
+      box-shadow: 0 2px 5px var(--rs-shadow);
+      border: 1px solid var(--rs-border);
+      background: var(--rs-card-bg);
+    }
+    .calendar-weekdays,
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .weekday-name {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6c757d;
+      font-weight: 600;
+      padding-bottom: 4px;
+    }
+    :root[data-bs-theme="dark"] .weekday-name {
+      color: rgba(255,255,255,0.65);
+    }
+    .calendar-day {
+      position: relative;
+      border: 1px solid var(--rs-soft-border);
+      background: var(--rs-card-bg);
+      border-radius: 10px;
+      min-height: 76px;
+      padding: 8px 8px 26px 8px;
+      transition: .15s;
+      text-align: center;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .calendar-day:hover {
+      background: var(--rs-hover-bg);
+      border-color: rgba(13,110,253,0.35);
+    }
+    .calendar-day.today {
+      border-color: #0d6efd;
+      box-shadow: 0 0 0 2px rgba(13,110,253,0.15);
+    }
+    .calendar-day.selected {
+      background: var(--rs-primary-soft);
+      border-color: rgba(13,110,253,0.55);
+      box-shadow: 0 0 0 3px rgba(13,110,253,0.15);
+    }
+    .calendar-day.empty {
+      border-style: dashed;
+      opacity: .45;
+      pointer-events: none;
+    }
+    .calendar-day-number {
+      font-weight: 600;
+      font-size: 1.02rem;
+      line-height: 1;
+    }
+    .pairs-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 17px;
+      min-width: 17px;
+      height: 17px;
+      border-radius: 999px;
+      background: #0d6efd;
+      color: #fff;
+      font-size: 0.56rem;
+      font-weight: 600;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      padding: 0;
+    }
+    .lesson-item {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: var(--rs-card-bg);
+    }
+    .lesson-item.clickable {
+      cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, transform .12s;
+    }
+    .lesson-item.clickable:hover {
+      border-color: rgba(13,110,253,0.45);
+      box-shadow: 0 4px 12px var(--rs-shadow);
+      transform: translateY(-1px);
+    }
+    .lesson-item:last-child {
+      margin-bottom: 0;
+    }
+    .lesson-time {
+      font-size: .85rem;
+      color: #6c757d;
+      margin-bottom: 4px;
+    }
+    :root[data-bs-theme="dark"] .lesson-time {
+      color: rgba(255,255,255,0.65);
+    }
+    .lesson-title {
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .lesson-meta {
+      font-size: .84rem;
+      color: #6c757d;
+      margin-top: 4px;
+      line-height: 1.2;
+    }
+    :root[data-bs-theme="dark"] .lesson-meta {
+      color: rgba(255,255,255,0.65);
+    }
+    .lesson-tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lesson-action-btn {
+      border: 1px solid var(--rs-soft-border);
+      background: transparent;
+      color: #6c757d;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+    }
+    .lesson-action-btn:hover {
+      border-color: rgba(13,110,253,0.45);
+      color: #0d6efd;
+      background: rgba(13,110,253,0.06);
+    }
+    .lesson-open-hint {
+      font-size: .78rem;
+      color: #0d6efd;
+      margin-top: 6px;
+      line-height: 1.2;
+    }
+    .lesson-gap-item {
+      border: 1px dashed var(--rs-soft-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: rgba(13,110,253,0.03);
+    }
+    .lesson-gap-item .lesson-time {
+      margin-bottom: 2px;
+    }
+    .group-check-list {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 8px;
+      background: var(--rs-card-bg);
+    }
+    .students-scroll-area {
+      max-height: 240px;
+      overflow-y: auto;
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      background: var(--rs-card-bg);
+    }
+    .students-scroll-area .list-group-item {
+      background: transparent;
+      border-color: var(--rs-soft-border);
+    }
+    .journal-actions {
+      width: min(100%, 420px);
+    }
+    .journal-export-btn {
+      width: min(100%, 325px);
+      align-self: flex-end;
+    }
+    #addLessonModal .modal-content {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 14px;
+      background: var(--rs-card-bg);
+      overflow: hidden;
+    }
+    #addLessonModal .modal-header {
+      border-bottom: 1px solid var(--rs-soft-border);
+      background: color-mix(in srgb, var(--rs-card-bg) 92%, #0d6efd 8%);
+    }
+    #addLessonModal .modal-footer {
+      border-top: 1px solid var(--rs-soft-border);
+      background: color-mix(in srgb, var(--rs-card-bg) 94%, #0d6efd 6%);
+    }
+    #addLessonModal .add-lesson-card {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--rs-card-bg) 92%, #0d6efd 8%);
+      padding: 11px 12px;
+      height: 100%;
+    }
+    #addLessonModal .add-lesson-card .form-label {
+      margin-bottom: 6px;
+      font-size: .88rem;
+      font-weight: 600;
+      letter-spacing: .01em;
+    }
+    #addLessonModal #derivedDateInfo {
+      margin-top: 10px !important;
+      border: 1px dashed rgba(13,110,253,0.35);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--rs-card-bg) 88%, #0d6efd 12%);
+      padding: 8px 10px;
+      line-height: 1.3;
+    }
+    #addLessonModal .group-check-list {
+      border-radius: 9px;
+      max-height: 215px;
+      padding: 8px;
+      background: var(--rs-card-bg);
+    }
+    #addLessonModal .group-check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color .14s ease;
+    }
+    #addLessonModal .group-check-row + .group-check-row {
+      margin-top: 2px;
+    }
+    #addLessonModal .group-check-row:hover {
+      background: var(--rs-hover-bg);
+    }
+    #addLessonModal .students-preview-card {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--rs-card-bg) 92%, #0d6efd 8%);
+      padding: 10px;
+    }
+    #addLessonModal .students-title {
+      font-size: .92rem;
+      letter-spacing: .01em;
+    }
+    #addLessonModal #modalStudentsCount {
+      font-size: .8rem;
+      color: #6c757d;
+      font-variant-numeric: tabular-nums;
+    }
+    #addLessonModal .students-scroll-area {
+      border-radius: 9px;
+      padding: 8px !important;
+    }
+    #addLessonModal .students-scroll-area .list-group {
+      border-color: var(--rs-soft-border) !important;
+      border-radius: 8px !important;
+      overflow: hidden;
+    }
+    #addLessonModal .students-scroll-area .list-group-item {
+      border-color: var(--rs-soft-border);
+    }
+    .filter-check-list {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      max-height: 190px;
+      overflow-y: auto;
+      padding: 10px;
+      background: var(--rs-card-bg);
+    }
+    #attendanceExportModal .export-card {
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 12px;
+      background: var(--rs-card-bg);
+      background: color-mix(in srgb, var(--rs-card-bg) 92%, #0d6efd 8%);
+      padding: 12px;
+      height: 100%;
+    }
+    #attendanceExportModal .export-card .form-label {
+      font-size: .88rem;
+      font-weight: 600;
+      letter-spacing: .01em;
+    }
+    #attendanceExportModal .filter-check-list {
+      border-radius: 9px;
+      max-height: 210px;
+      padding: 8px;
+      background: var(--rs-card-bg);
+    }
+    #attendanceExportModal .export-check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color .14s ease;
+    }
+    #attendanceExportModal .export-check-row + .export-check-row {
+      margin-top: 2px;
+    }
+    #attendanceExportModal .export-check-row:hover {
+      background: var(--rs-hover-bg);
+    }
+    #attendanceExportModal .export-check-row .form-check-input {
+      float: none;
+      margin: 0;
+      width: 1.05em;
+      height: 1.05em;
+      flex: 0 0 auto;
+    }
+    #attendanceExportModal .export-check-row .form-check-label {
+      line-height: 1.25;
+      cursor: pointer;
+    }
+    #attendanceExportModal .export-student-lookup {
+      position: relative;
+    }
+    #attendanceExportModal .export-student-suggest {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 1085;
+      max-height: 230px;
+      overflow-y: auto;
+      border: 1px solid var(--rs-soft-border);
+      border-radius: 10px;
+      background: var(--rs-card-bg);
+      box-shadow: 0 8px 24px var(--rs-shadow);
+    }
+    #attendanceExportModal .export-student-suggest .list-group-item {
+      border: 0;
+      border-bottom: 1px solid var(--rs-soft-border);
+    }
+    #attendanceExportModal .export-student-suggest .list-group-item:last-child {
+      border-bottom: 0;
+    }
+    #attendanceExportModal .export-student-suggest .student-meta {
+      font-size: .78rem;
+      color: #6c757d;
+    }
+    :root[data-bs-theme="dark"] #attendanceExportModal .export-student-suggest .student-meta {
+      color: rgba(255,255,255,0.68);
+    }
+    :root[data-bs-theme="dark"] #attendanceExportModal .export-card {
+      background: var(--rs-card-bg);
+      background: color-mix(in srgb, var(--rs-card-bg) 90%, #0d6efd 10%);
+    }
+    :root[data-bs-theme="dark"] #addLessonModal .modal-header {
+      background: color-mix(in srgb, var(--rs-card-bg) 89%, #0d6efd 11%);
+    }
+    :root[data-bs-theme="dark"] #addLessonModal .modal-footer {
+      background: color-mix(in srgb, var(--rs-card-bg) 91%, #0d6efd 9%);
+    }
+    :root[data-bs-theme="dark"] #addLessonModal .add-lesson-card,
+    :root[data-bs-theme="dark"] #addLessonModal .students-preview-card {
+      background: color-mix(in srgb, var(--rs-card-bg) 90%, #0d6efd 10%);
+    }
+    :root[data-bs-theme="dark"] #addLessonModal #derivedDateInfo {
+      background: color-mix(in srgb, var(--rs-card-bg) 84%, #0d6efd 16%);
+      border-color: rgba(130,180,255,0.45);
+    }
+    :root[data-bs-theme="dark"] #addLessonModal #modalStudentsCount {
+      color: rgba(255,255,255,0.68);
+    }
+    .warning-soft-card {
+      border: 1px solid rgba(220,53,69,0.2);
+      border-radius: 10px;
+      background: rgba(220,53,69,0.05);
+      padding: 10px 12px;
+    }
+    :root[data-bs-theme="dark"] .warning-soft-card {
+      background: rgba(220,53,69,0.12);
+      border-color: rgba(220,53,69,0.35);
+    }
+    .tiny-note {
+      font-size: .83rem;
+      color: #6c757d;
+      line-height: 1.35;
+    }
+    #deleteWarningPreview {
+      white-space: pre-line;
+    }
+    :root[data-bs-theme="dark"] .tiny-note {
+      color: rgba(255,255,255,0.7);
+    }
+    @media (max-width: 991.98px) {
+      .journal-actions {
+        width: 100%;
+      }
+    }
+
+    :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
+    :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
+  </style>
+</head>
+<body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
+
+<div class="container py-4" id="journalPage">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm mb-2 d-inline-flex align-items-center justify-content-center gap-1">
+        <i class="bi bi-arrow-left"></i> Назад
+      </a>
+      <h2 class="m-0 fw-bold">Журнал</h2>
+      <div class="text-muted small mt-1">Календарь и расписание по выбранной дате</div>
+      <div class="text-muted small mt-1">Активный семестр: {{ active_semester_label }}</div>
+    </div>
+
+    <div class="d-flex flex-column gap-2 align-items-end ms-3 journal-actions">
+      <div class="d-flex gap-2 align-items-center justify-content-end w-100">
+        {{ settings_button() }}
+        <button
+          type="button"
+          class="btn btn-primary"
+          id="openAddLessonBtn"
+          {% if not courses or not groups %}disabled{% endif %}
+        >
+          <i class="bi bi-plus-lg me-1"></i> Добавить занятие в календарь
+        </button>
+      </div>
+      <button type="button" class="btn btn-outline-success journal-export-btn" id="openAttendanceExportBtn">
+        <i class="bi bi-file-earmark-excel me-1"></i> Выгрузка посещаемости в Excel
+      </button>
+    </div>
+  </div>
+
+  {% if not courses or not groups %}
+  <div class="alert alert-warning mb-3">
+    Чтобы добавлять занятия, нужны хотя бы один предмет и одна группа.
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-xl-5">
+      <div class="panel-card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="prevMonthBtn">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <div class="fw-bold text-capitalize" id="monthLabel">-</div>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="nextMonthBtn">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+
+        <div class="calendar-weekdays mb-1">
+          <div class="weekday-name">Пн</div>
+          <div class="weekday-name">Вт</div>
+          <div class="weekday-name">Ср</div>
+          <div class="weekday-name">Чт</div>
+          <div class="weekday-name">Пт</div>
+          <div class="weekday-name">Сб</div>
+          <div class="weekday-name">Вс</div>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="panel-card p-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+          <div>
+            <h5 class="m-0 fw-bold" id="selectedDateTitle">-</h5>
+            <div class="text-muted small mt-1" id="selectedDateMeta"></div>
+          </div>
+          <span class="badge bg-primary" id="selectedDatePairsBadge">Количество занятий: 0</span>
+        </div>
+
+        <div id="dayMessage" class="alert py-2 px-3 mt-2 d-none"></div>
+        <div id="dayLessonsList" class="mt-2">
+          <div class="text-center text-muted py-5">Выберите дату</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="addLessonModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="lessonModalTitle"><i class="bi bi-journal-plus me-2"></i>Добавить занятие</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <div class="add-lesson-card">
+              <label class="form-label">Дата</label>
+              <input type="date" class="form-control" id="lessonDate">
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="add-lesson-card">
+              <label class="form-label">Пара</label>
+              <select class="form-select" id="lessonPair">
+                {% for slot in pair_slots %}
+                  <option value="{{ slot.number }}">{{ slot.label }} ({{ slot.time }})</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="add-lesson-card">
+              <label class="form-label">Аудитория</label>
+              <input type="text" class="form-control" id="lessonRoom" maxlength="40" placeholder="Например: Г-414">
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-2 small text-muted" id="derivedDateInfo">-</div>
+
+        <div class="row g-2 mt-1">
+          <div class="col-md-6">
+            <div class="add-lesson-card">
+              <label class="form-label">Предмет</label>
+              <select class="form-select" id="lessonCourse">
+                {% for course in courses %}
+                  <option value="{{ course.id }}">{{ course.title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="add-lesson-card">
+              <label class="form-label">Группы</label>
+              <div class="group-check-list" id="lessonGroupChecks">
+                {% for group in groups %}
+                  <label class="form-check group-check-row">
+                    <input class="form-check-input lesson-group-check m-0" type="checkbox" value="{{ group.id }}">
+                    <span class="form-check-label">{{ group.name }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+              <div class="form-text">Можно выбирать несколько групп для одной пары</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 students-preview-card">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold students-title">Студенты выбранных групп</div>
+            <div class="small text-muted" id="modalStudentsCount"></div>
+          </div>
+          <div class="students-scroll-area p-2" id="modalStudentsArea">
+            <div class="text-center text-muted mt-4 mb-4">Выберите группу или несколько групп</div>
+          </div>
+        </div>
+
+        <div id="modalMessage" class="alert py-2 px-3 mt-3 mb-0 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <div class="me-auto d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-danger d-none" type="button" id="deleteSingleLessonBtn">
+            <i class="bi bi-trash3 me-1"></i>Удалить это занятие
+          </button>
+          <button class="btn btn-outline-danger d-none" type="button" id="deleteCourseLessonsBtn">
+            <i class="bi bi-trash-fill me-1"></i>Удалить все занятия с этим именем
+          </button>
+        </div>
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-primary" type="button" id="saveLessonBtn">
+          <i class="bi bi-check2 me-1"></i> Добавить
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="attendanceExportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="get" action="{{ url_for('journal_export_attendance_excel') }}" id="attendanceExportForm">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Выгрузка посещаемости в Excel</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="tiny-note mb-3">
+            Экспорт формируется по созданным занятиям в выбранном диапазоне дат.
+            В файл попадут: статус студента (был/не был), источник отметки и IP-адрес.
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="export-card">
+                <label class="form-label mb-1">Дата с</label>
+                <input type="date" class="form-control" name="date_from" id="exportDateFrom" value="{{ selected_date_iso }}" required>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="export-card">
+                <label class="form-label mb-1">Дата по</label>
+                <input type="date" class="form-control" name="date_to" id="exportDateTo" value="{{ selected_date_iso }}" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-12">
+              <div class="export-card">
+                <label class="form-label mb-1">Поиск по студенту</label>
+                <div class="export-student-lookup" id="exportStudentLookup">
+                  <input
+                    type="text"
+                    class="form-control"
+                    name="student_query"
+                    id="exportStudentQuery"
+                    placeholder="ФИО или часть ФИО (необязательно)"
+                    maxlength="120"
+                    autocomplete="off"
+                  >
+                  <input type="hidden" name="student_id" id="exportStudentId" value="">
+                  <div id="exportStudentSuggest" class="export-student-suggest list-group d-none"></div>
+                </div>
+                <div class="tiny-note mt-1" id="exportStudentHint">Поиск всегда выполняется по всем группам. Если поле пустое, выгрузка будет по всем студентам.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-lg-6">
+              <div class="export-card">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label m-0">Группы</label>
+                  <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportGroupsSelectAll">Все</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportGroupsClearAll">Снять</button>
+                  </div>
+                </div>
+                <div class="filter-check-list" id="exportGroupsList">
+                  {% for group in groups %}
+                    <label class="export-check-row">
+                      <input class="form-check-input export-group-check" type="checkbox" name="group_ids" value="{{ group.id }}" checked>
+                      <span class="form-check-label">{{ group.name }}</span>
+                    </label>
+                  {% endfor %}
+                  {% if not groups %}
+                    <div class="tiny-note">Групп пока нет</div>
+                  {% endif %}
+                </div>
+                <div class="tiny-note mt-1">Если ничего не выбрать, выгрузка будет по всем группам.</div>
+              </div>
+            </div>
+
+            <div class="col-lg-6">
+              <div class="export-card">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label m-0">Предметы</label>
+                  <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportCoursesSelectAll">Все</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="exportCoursesClearAll">Снять</button>
+                  </div>
+                </div>
+                <div class="filter-check-list" id="exportCoursesList">
+                  {% for course in courses %}
+                    <label class="export-check-row">
+                      <input class="form-check-input export-course-check" type="checkbox" name="course_ids" value="{{ course.id }}" checked>
+                      <span class="form-check-label">{{ course.title }}</span>
+                    </label>
+                  {% endfor %}
+                  {% if not courses %}
+                    <div class="tiny-note">Предметов пока нет</div>
+                  {% endif %}
+                </div>
+                <div class="tiny-note mt-1">Если ничего не выбрать, выгрузка будет по всем предметам.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <div class="export-card">
+                <label class="form-label mb-1">Статусы для выгрузки</label>
+                <div class="filter-check-list" id="exportStatusList">
+                  <label class="export-check-row">
+                    <input class="form-check-input export-status-check" type="checkbox" name="status" value="present" checked>
+                    <span class="form-check-label">Присутствовал</span>
+                  </label>
+                  <label class="export-check-row">
+                    <input class="form-check-input export-status-check" type="checkbox" name="status" value="absent" checked>
+                    <span class="form-check-label">Отсутствовал</span>
+                  </label>
+                  <label class="export-check-row">
+                    <input class="form-check-input export-status-check" type="checkbox" name="status" value="excused" checked>
+                    <span class="form-check-label">Отсутствовал (уваж.)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="export-card">
+                <label class="form-label mb-1">Источник отметки</label>
+                <div class="filter-check-list" id="exportSourceList">
+                  <label class="export-check-row">
+                    <input class="form-check-input export-source-check" type="checkbox" name="source" value="qr" checked>
+                    <span class="form-check-label">QR</span>
+                  </label>
+                  <label class="export-check-row">
+                    <input class="form-check-input export-source-check" type="checkbox" name="source" value="manual" checked>
+                    <span class="form-check-label">Локально</span>
+                  </label>
+                  <label class="export-check-row">
+                    <input class="form-check-input export-source-check" type="checkbox" name="source" value="unmarked" checked>
+                    <span class="form-check-label">Не отмечено</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="exportModalMessage" class="alert py-2 px-3 mt-3 mb-0 d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-download me-1"></i>Скачать Excel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="deleteCourseWarningModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-danger-subtle">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Подтвердите удаление предмета из журнала</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="warning-soft-card mb-3">
+          <div class="fw-semibold mb-1">Будут удалены все занятия предмета и связанные отметки посещаемости.</div>
+          <div class="tiny-note mb-0">
+            Перед удалением рекомендуется сделать резервную копию: используйте кнопку
+            <span class="fw-semibold">«Выгрузка посещаемости в Excel»</span>.
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <div class="fw-semibold" id="deleteWarningCourseTitle">Предмет</div>
+          <div class="tiny-note" id="deleteWarningSemesterText">Семестр: -</div>
+        </div>
+
+        <div id="deleteWarningPreview" class="tiny-note border rounded-3 p-2">
+          Подготовка данных для предупреждения...
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-danger" type="button" id="confirmDeleteCourseBtn">
+          <i class="bi bi-trash-fill me-1"></i>Удалить предмет и отметки
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ settings_modal(app_version) }}
+<script id="journalBootstrapData" type="application/json">
+  {{ {
+    "lessons": lessons,
+    "pair_slots": pair_slots,
+    "can_create_lesson": ((courses|length) > 0 and (groups|length) > 0),
+    "active_semester_key": active_semester_key,
+    "active_semester_label": active_semester_label,
+    "selected_date": selected_date_iso
+  } | tojson }}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const BOOTSTRAP_RAW =
+    (document.getElementById('journalBootstrapData') || { textContent: '{}' }).textContent || '{}';
+  let BOOTSTRAP_DATA = {};
+  try {
+    BOOTSTRAP_DATA = JSON.parse(BOOTSTRAP_RAW);
+  } catch (e) {
+    BOOTSTRAP_DATA = {};
+  }
+
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const LESSONS = Array.isArray(BOOTSTRAP_DATA.lessons) ? BOOTSTRAP_DATA.lessons : [];
+  const PAIR_SLOTS = Array.isArray(BOOTSTRAP_DATA.pair_slots) ? BOOTSTRAP_DATA.pair_slots : [];
+  const CAN_CREATE_LESSON = Boolean(BOOTSTRAP_DATA.can_create_lesson);
+  const ACTIVE_SEMESTER_KEY = String(BOOTSTRAP_DATA.active_semester_key || '');
+  const ACTIVE_SEMESTER_LABEL = String(BOOTSTRAP_DATA.active_semester_label || '');
+  const BOOTSTRAP_SELECTED_DATE = String(BOOTSTRAP_DATA.selected_date || '');
+  const DAY_NAMES = {
+    1: 'Понедельник',
+    2: 'Вторник',
+    3: 'Среда',
+    4: 'Четверг',
+    5: 'Пятница',
+    6: 'Суббота',
+    7: 'Воскресенье'
+  };
+
+  const pairByNumber = {};
+  PAIR_SLOTS.forEach((slot) => {
+    pairByNumber[Number(slot.number)] = slot;
+  });
+
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function toIsoDate(date) {
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  }
+
+  function fromIsoDate(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    const [year, month, day] = iso.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function formatRuDate(iso) {
+    const date = fromIsoDate(iso);
+    if (!date) return '-';
+    return date.toLocaleDateString('ru-RU', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  }
+
+  function getDayIdByDate(date) {
+    const nativeDay = date.getDay();
+    return nativeDay === 0 ? 7 : nativeDay;
+  }
+
+  function getUtcMidnightMs(dateObj) {
+    return Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  }
+
+  function semesterLabelFromKey(semesterKey) {
+    if (!semesterKey || !String(semesterKey).includes(':')) return String(semesterKey || '');
+    const [years] = String(semesterKey).split(':');
+    return years;
+  }
+
+  function getSemesterBaseByDate(dateObj) {
+    const month = dateObj.getMonth() + 1;
+    const year = dateObj.getFullYear();
+    const startYear = (month >= 9) ? year : (year - 1);
+    const term = (month >= 9 || month === 1) ? 1 : 2;
+    const semesterKey = `${startYear}-${startYear + 1}:${term}`;
+    return {
+      startYear,
+      term,
+      semesterKey,
+      semesterLabel: semesterLabelFromKey(semesterKey),
+    };
+  }
+
+  function getAcademicCalendarByStartYear(startYear) {
+    return {
+      autumnClassesStart: new Date(startYear, 8, 1),
+      autumnClassesEnd: new Date(startYear, 11, 23),
+      autumnCreditStart: new Date(startYear, 11, 24),
+      autumnCreditEnd: new Date(startYear, 11, 31),
+      newYearBreakStart: new Date(startYear, 11, 31),
+      newYearBreakEnd: new Date(startYear + 1, 0, 9),
+      winterGapStart: new Date(startYear + 1, 0, 10),
+      winterGapEnd: new Date(startYear + 1, 0, 11),
+      winterExamStart: new Date(startYear + 1, 0, 12),
+      winterExamEnd: new Date(startYear + 1, 0, 31),
+      winterHolidayStart: new Date(startYear + 1, 1, 1),
+      winterHolidayEnd: new Date(startYear + 1, 1, 8),
+      springClassesStart: new Date(startYear + 1, 1, 9),
+      springClassesEnd: new Date(startYear + 1, 5, 6),
+      springGapStart: new Date(startYear + 1, 5, 7),
+      springGapEnd: new Date(startYear + 1, 5, 10),
+      springCreditStart: new Date(startYear + 1, 5, 11),
+      springCreditEnd: new Date(startYear + 1, 5, 20),
+      summerExamStart: new Date(startYear + 1, 5, 21),
+      summerExamEnd: new Date(startYear + 1, 6, 6),
+      summerHolidayStart: new Date(startYear + 1, 6, 6),
+      summerHolidayEnd: new Date(startYear + 1, 7, 31),
+    };
+  }
+
+  function isDateInRange(dateObj, startDate, endDate) {
+    const valueMs = getUtcMidnightMs(dateObj);
+    return valueMs >= getUtcMidnightMs(startDate) && valueMs <= getUtcMidnightMs(endDate);
+  }
+
+  function getDateAcademicInfo(dateObj) {
+    const base = getSemesterBaseByDate(dateObj);
+    const calendar = getAcademicCalendarByStartYear(base.startYear);
+
+    const info = {
+      ...base,
+      dayId: getDayIdByDate(dateObj),
+      stage: 'unknown',
+      stageLabel: 'Вне учебного периода',
+      weekNumber: null,
+      weekParity: null,
+      isTeachingPeriod: false,
+    };
+
+    let classStart = null;
+    if (isDateInRange(dateObj, calendar.autumnClassesStart, calendar.autumnClassesEnd)) {
+      info.stage = 'classes_autumn';
+      info.stageLabel = 'Осенний учебный период';
+      classStart = calendar.autumnClassesStart;
+    } else if (isDateInRange(dateObj, calendar.springClassesStart, calendar.springClassesEnd)) {
+      info.stage = 'classes_spring';
+      info.stageLabel = 'Весенний учебный период';
+      classStart = calendar.springClassesStart;
+    } else if (isDateInRange(dateObj, calendar.newYearBreakStart, calendar.newYearBreakEnd)) {
+      info.stage = 'new_year_break';
+      info.stageLabel = 'Новогодние выходные';
+    } else if (isDateInRange(dateObj, calendar.winterHolidayStart, calendar.winterHolidayEnd)) {
+      info.stage = 'winter_holidays';
+      info.stageLabel = 'Зимние каникулы';
+    } else if (isDateInRange(dateObj, calendar.summerHolidayStart, calendar.summerHolidayEnd)) {
+      info.stage = 'summer_holidays';
+      info.stageLabel = 'Летние каникулы';
+    } else if (isDateInRange(dateObj, calendar.autumnCreditStart, calendar.autumnCreditEnd)) {
+      info.stage = 'autumn_credit';
+      info.stageLabel = 'Зачетная сессия';
+    } else if (isDateInRange(dateObj, calendar.winterGapStart, calendar.winterGapEnd)) {
+      info.stage = 'winter_gap';
+      info.stageLabel = 'Переходный период';
+    } else if (isDateInRange(dateObj, calendar.winterExamStart, calendar.winterExamEnd)) {
+      info.stage = 'winter_exam';
+      info.stageLabel = 'Зимняя экзаменационная сессия';
+    } else if (isDateInRange(dateObj, calendar.springGapStart, calendar.springGapEnd)) {
+      info.stage = 'spring_gap';
+      info.stageLabel = 'Переходный период';
+    } else if (isDateInRange(dateObj, calendar.springCreditStart, calendar.springCreditEnd)) {
+      info.stage = 'spring_credit';
+      info.stageLabel = 'Зачетная сессия';
+    } else if (isDateInRange(dateObj, calendar.summerExamStart, calendar.summerExamEnd)) {
+      info.stage = 'summer_exam';
+      info.stageLabel = 'Летняя экзаменационная сессия';
+    }
+
+    if (info.stage === 'classes_autumn' || info.stage === 'classes_spring') {
+      const deltaDays = Math.floor((getUtcMidnightMs(dateObj) - getUtcMidnightMs(classStart)) / 86400000);
+      const rawWeek = Math.floor(deltaDays / 7) + 1;
+      const weekNumber = Math.min(Math.max(1, rawWeek), 16);
+      info.weekNumber = weekNumber;
+      info.weekParity = (weekNumber % 2 === 1) ? 'I' : 'II';
+      info.isTeachingPeriod = true;
+    }
+
+    return info;
+  }
+
+  function stageDisabledMessage(info) {
+    if (!info) return 'Дата вне учебного периода';
+    switch (String(info.stage || '')) {
+      case 'autumn_credit':
+        return 'Идет зачетная сессия (24 декабря - 31 декабря), пары недоступны';
+      case 'new_year_break':
+        return 'Идут новогодние выходные (31 декабря - 9 января), пары недоступны';
+      case 'winter_gap':
+        return 'Переходный период между праздниками и зимней сессией, пары недоступны';
+      case 'winter_exam':
+        return 'Идет зимняя экзаменационная сессия (12 января - 31 января), пары недоступны';
+      case 'winter_holidays':
+        return 'Идут зимние каникулы (1 февраля - 8 февраля), пары недоступны';
+      case 'spring_gap':
+        return 'Переходный период между занятиями и зачетной сессией, пары недоступны';
+      case 'spring_credit':
+        return 'Идет зачетная сессия (11 июня - 20 июня), пары недоступны';
+      case 'summer_exam':
+        return 'Идет летняя экзаменационная сессия (21 июня - 6 июля), пары недоступны';
+      case 'summer_holidays':
+        return 'Идут летние каникулы (6 июля - 31 августа), пары недоступны';
+      default:
+        return `Дата вне учебного периода для ${info.semesterLabel}`;
+    }
+  }
+
+  function parityWithLabel(parity) {
+    if (String(parity) === 'I') return 'I нечётная';
+    if (String(parity) === 'II') return 'II чётная';
+    return String(parity || '');
+  }
+
+  function sortLessons(lessons) {
+    return lessons.slice().sort((a, b) => {
+      const pairDiff = Number(a.pair_number || 0) - Number(b.pair_number || 0);
+      if (pairDiff !== 0) return pairDiff;
+      const groupA = String(a.group_name || '');
+      const groupB = String(b.group_name || '');
+      return groupA.localeCompare(groupB, 'ru');
+    });
+  }
+
+  function getLessonsForDate(dateIso) {
+    const date = fromIsoDate(dateIso);
+    if (!date) return [];
+
+    const dayId = getDayIdByDate(date);
+    if (dayId === 7) return [];
+
+    const semesterInfo = getDateAcademicInfo(date);
+    if (!semesterInfo || !semesterInfo.isTeachingPeriod) return [];
+    if (semesterInfo.semesterKey !== ACTIVE_SEMESTER_KEY) return [];
+
+    const filtered = LESSONS.filter((lesson) =>
+      String(lesson.semester_key || '') === ACTIVE_SEMESTER_KEY &&
+      String(lesson.week_parity) === semesterInfo.weekParity &&
+      Number(lesson.day_of_week) === dayId
+    );
+
+    return sortLessons(filtered);
+  }
+
+  function getPairsCountForDate(dateIso) {
+    const lessons = getLessonsForDate(dateIso);
+    return new Set(lessons.map((lesson) => Number(lesson.pair_number))).size;
+  }
+
+  function buildLessonAttendanceUrl(lesson, dateIso) {
+    if (lesson && lesson.attendance_url) return String(lesson.attendance_url);
+    return `/journal/lesson/${Number(lesson.id)}?date=${encodeURIComponent(dateIso)}`;
+  }
+
+  async function loadLessonsForDate(dateIso) {
+    const response = await fetch(`/api/journal/date/${encodeURIComponent(dateIso)}/lessons`);
+    const data = await response.json();
+    if (!response.ok || !data || !data.success) {
+      throw new Error((data && data.error) ? data.error : 'Не удалось загрузить занятия');
+    }
+    return Array.isArray(data.lessons) ? data.lessons : [];
+  }
+
+  function closeDateStream() {
+    if (dateStreamSource) {
+      dateStreamSource.close();
+      dateStreamSource = null;
+      dateStreamIso = '';
+    }
+    stopDatePolling();
+  }
+
+  function stopDatePolling() {
+    if (datePollTimer) {
+      clearInterval(datePollTimer);
+      datePollTimer = null;
+      datePollIso = '';
+    }
+  }
+
+  function startDatePolling(dateIso) {
+    if (!dateIso) return;
+    if (datePollTimer && datePollIso === dateIso) return;
+    stopDatePolling();
+    datePollIso = dateIso;
+    datePollTimer = setInterval(() => {
+      if (selectedDateIso !== dateIso) return;
+      renderSelectedDay();
+    }, 7000);
+  }
+
+  function openDateStream(dateIso) {
+    if (!dateIso) return;
+    if (!window.EventSource) {
+      startDatePolling(dateIso);
+      return;
+    }
+    if (dateStreamSource && dateStreamIso === dateIso) return;
+
+    closeDateStream();
+    dateStreamIso = dateIso;
+    dateStreamSource = new EventSource(`/stream/journal/date/${encodeURIComponent(dateIso)}`);
+    dateStreamSource.addEventListener('lessons', () => {
+      if (selectedDateIso !== dateIso) return;
+      renderCalendar();
+      renderSelectedDay();
+    });
+    dateStreamSource.onerror = () => {
+      if (dateStreamSource && dateStreamSource.readyState === 2) {
+        startDatePolling(dateIso);
+      }
+    };
+  }
+
+  function setDayMessage(text, type) {
+    const el = document.getElementById('dayMessage');
+    if (!el) return;
+
+    if (!text) {
+      el.className = 'alert py-2 px-3 mt-2 d-none';
+      el.textContent = '';
+      return;
+    }
+
+    const map = {
+      info: 'alert-info',
+      success: 'alert-success',
+      warning: 'alert-warning',
+      danger: 'alert-danger'
+    };
+    el.className = `alert ${map[type] || map.info} py-2 px-3 mt-2`;
+    el.textContent = text;
+  }
+
+  function setModalMessage(text, type) {
+    const el = document.getElementById('modalMessage');
+    if (!el) return;
+
+    if (!text) {
+      el.className = 'alert py-2 px-3 mt-3 mb-0 d-none';
+      el.textContent = '';
+      return;
+    }
+
+    const map = {
+      info: 'alert-info',
+      success: 'alert-success',
+      warning: 'alert-warning',
+      danger: 'alert-danger'
+    };
+    el.className = `alert ${map[type] || map.info} py-2 px-3 mt-3 mb-0`;
+    el.textContent = text;
+  }
+
+  function setExportModalMessage(text, type) {
+    const el = document.getElementById('exportModalMessage');
+    if (!el) return;
+
+    if (!text) {
+      el.className = 'alert py-2 px-3 mt-3 mb-0 d-none';
+      el.textContent = '';
+      return;
+    }
+
+    const map = {
+      info: 'alert-info',
+      success: 'alert-success',
+      warning: 'alert-warning',
+      danger: 'alert-danger'
+    };
+    el.className = `alert ${map[type] || map.info} py-2 px-3 mt-3 mb-0`;
+    el.textContent = text;
+  }
+
+  function getAttendanceExportModal() {
+    if (!attendanceExportModalInstance) {
+      attendanceExportModalInstance = new bootstrap.Modal(document.getElementById('attendanceExportModal'));
+    }
+    return attendanceExportModalInstance;
+  }
+
+  function getDeleteWarningModal() {
+    if (!deleteWarningModalInstance) {
+      deleteWarningModalInstance = new bootstrap.Modal(document.getElementById('deleteCourseWarningModal'));
+    }
+    return deleteWarningModalInstance;
+  }
+
+  function formatHumanDate(isoDate) {
+    const dateObj = fromIsoDate(isoDate);
+    if (!dateObj) return String(isoDate || '-');
+    return dateObj.toLocaleDateString('ru-RU');
+  }
+
+  function setChecks(selector, checked) {
+    document.querySelectorAll(selector).forEach((input) => {
+      input.checked = Boolean(checked);
+    });
+  }
+
+  function checkedExportGroupIds() {
+    return Array.from(document.querySelectorAll('.export-group-check:checked'))
+      .map((input) => Number(input.value || 0))
+      .filter((value) => value > 0);
+  }
+
+  function setExportStudentHint(text) {
+    const hint = document.getElementById('exportStudentHint');
+    if (!hint) return;
+    hint.textContent = String(text || EXPORT_STUDENT_HINT_DEFAULT);
+  }
+
+  function closeExportStudentSuggest() {
+    const box = document.getElementById('exportStudentSuggest');
+    if (!box) return;
+    box.innerHTML = '';
+    box.classList.add('d-none');
+  }
+
+  function clearExportStudentSelection(options = {}) {
+    const keepText = Boolean(options.keepText);
+    const input = document.getElementById('exportStudentQuery');
+    const hidden = document.getElementById('exportStudentId');
+    if (hidden) hidden.value = '';
+    if (input) {
+      if (!keepText) input.value = '';
+      input.dataset.selectedId = '';
+      input.dataset.selectedGroupId = '';
+      input.dataset.selectedName = '';
+    }
+    setExportStudentHint(EXPORT_STUDENT_HINT_DEFAULT);
+  }
+
+  function bindExportStudentGroup(groupId) {
+    const targetGroupId = Number(groupId || 0);
+    if (!targetGroupId) return;
+    const checks = Array.from(document.querySelectorAll('.export-group-check'));
+    if (!checks.length) return;
+    checks.forEach((input) => {
+      input.checked = Number(input.value || 0) === targetGroupId;
+    });
+  }
+
+  function selectExportStudent(student) {
+    const input = document.getElementById('exportStudentQuery');
+    const hidden = document.getElementById('exportStudentId');
+    if (!input || !hidden || !student) return;
+    const sid = Number(student.id || 0);
+    const gid = Number(student.group_id || 0);
+    const fio = String(student.fio || '').trim();
+    const groupName = String(student.group_name || '');
+    if (!sid || !fio) return;
+
+    input.value = fio;
+    input.dataset.selectedId = String(sid);
+    input.dataset.selectedGroupId = String(gid || 0);
+    input.dataset.selectedName = fio;
+    hidden.value = String(sid);
+    bindExportStudentGroup(gid);
+    setExportStudentHint(groupName ? `Выбран студент: ${fio} (${groupName})` : `Выбран студент: ${fio}`);
+    closeExportStudentSuggest();
+  }
+
+  function renderExportStudentSuggest(items) {
+    const box = document.getElementById('exportStudentSuggest');
+    if (!box) return;
+    box.innerHTML = '';
+
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'list-group-item small text-muted';
+      empty.textContent = 'Студенты не найдены';
+      box.appendChild(empty);
+      box.classList.remove('d-none');
+      return;
+    }
+
+    list.forEach((item) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'list-group-item list-group-item-action';
+      btn.dataset.studentId = String(item.id || 0);
+      const name = document.createElement('div');
+      name.className = 'fw-semibold';
+      name.textContent = String(item.fio || '-');
+      const meta = document.createElement('div');
+      meta.className = 'student-meta';
+      meta.textContent = String(item.group_name || '-');
+      btn.appendChild(name);
+      btn.appendChild(meta);
+      btn.addEventListener('click', () => selectExportStudent(item));
+      box.appendChild(btn);
+    });
+    box.classList.remove('d-none');
+  }
+
+  async function loadExportStudentSuggest(queryText) {
+    const query = String(queryText || '').trim();
+    if (query.length < 2) {
+      closeExportStudentSuggest();
+      return;
+    }
+    const requestId = ++exportStudentSearchSeq;
+    const params = new URLSearchParams();
+    params.set('q', query);
+    params.set('limit', '10');
+
+    try {
+      const response = await fetch(`/api/journal/students/search?${params.toString()}`);
+      const data = await response.json();
+      if (requestId !== exportStudentSearchSeq) return;
+      if (!response.ok || !data.success) {
+        closeExportStudentSuggest();
+        return;
+      }
+      renderExportStudentSuggest(data.students || []);
+    } catch (_err) {
+      if (requestId !== exportStudentSearchSeq) return;
+      closeExportStudentSuggest();
+    }
+  }
+
+  function scheduleExportStudentSuggest(delayMs = 220) {
+    if (exportStudentSearchTimer) {
+      clearTimeout(exportStudentSearchTimer);
+      exportStudentSearchTimer = null;
+    }
+    const input = document.getElementById('exportStudentQuery');
+    const value = input ? String(input.value || '').trim() : '';
+    exportStudentSearchTimer = setTimeout(() => {
+      loadExportStudentSuggest(value);
+    }, Math.max(0, Number(delayMs || 0)));
+  }
+
+  function openAttendanceExportModal() {
+    const fromInput = document.getElementById('exportDateFrom');
+    const toInput = document.getElementById('exportDateTo');
+    if (fromInput) fromInput.value = selectedDateIso || todayIso;
+    if (toInput) toInput.value = selectedDateIso || todayIso;
+    clearExportStudentSelection({ keepText: false });
+    closeExportStudentSuggest();
+    setExportModalMessage('', 'info');
+    getAttendanceExportModal().show();
+  }
+
+  function validateAttendanceExportForm(event) {
+    const form = document.getElementById('attendanceExportForm');
+    if (!form) return true;
+
+    const fromInput = document.getElementById('exportDateFrom');
+    const toInput = document.getElementById('exportDateTo');
+    const fromDate = fromInput ? fromIsoDate(fromInput.value) : null;
+    const toDate = toInput ? fromIsoDate(toInput.value) : null;
+
+    if (!fromDate || !toDate) {
+      setExportModalMessage('Укажите корректные даты начала и конца периода.', 'warning');
+      if (event) event.preventDefault();
+      return false;
+    }
+
+    if (fromDate.getTime() > toDate.getTime()) {
+      setExportModalMessage('Дата "с" не может быть позже даты "по".', 'warning');
+      if (event) event.preventDefault();
+      return false;
+    }
+
+    const hasStatus = document.querySelectorAll('#exportStatusList input[type="checkbox"]:checked').length > 0;
+    if (!hasStatus) {
+      setExportModalMessage('Выберите хотя бы один статус.', 'warning');
+      if (event) event.preventDefault();
+      return false;
+    }
+
+    const hasSource = document.querySelectorAll('#exportSourceList input[type="checkbox"]:checked').length > 0;
+    if (!hasSource) {
+      setExportModalMessage('Выберите хотя бы один источник отметки.', 'warning');
+      if (event) event.preventDefault();
+      return false;
+    }
+
+    setExportModalMessage('', 'info');
+    return true;
+  }
+
+  function renderDeleteWarningPreview(payload) {
+    const previewEl = document.getElementById('deleteWarningPreview');
+    if (!previewEl) return;
+
+    const safePayload = payload || {};
+    const lessonCount = Number(safePayload.lessons_count || 0);
+    const sessionsCount = Number(safePayload.sessions_count || 0);
+    const marksCount = Number(safePayload.attendance_count || 0);
+    const dateFrom = safePayload.date_from ? formatHumanDate(safePayload.date_from) : '-';
+    const dateTo = safePayload.date_to ? formatHumanDate(safePayload.date_to) : '-';
+    const groups = Array.isArray(safePayload.group_names) ? safePayload.group_names : [];
+    const previewDates = Array.isArray(safePayload.session_dates_preview) ? safePayload.session_dates_preview : [];
+    const hiddenDates = Number(safePayload.session_dates_hidden || 0);
+
+    const lines = [];
+    lines.push(`Занятий к удалению: ${lessonCount}`);
+    lines.push(`Сессий посещаемости: ${sessionsCount}`);
+    lines.push(`Отметок студентов: ${marksCount}`);
+    lines.push(`Период с отметками: ${dateFrom} - ${dateTo}`);
+    if (groups.length) {
+      lines.push(`Группы: ${groups.join(', ')}`);
+    }
+    if (previewDates.length) {
+      const shownDates = previewDates.slice(0, 8).map((value) => formatHumanDate(value)).join(', ');
+      lines.push(`Затрагиваемые дни: ${shownDates}${hiddenDates > 0 ? ` и еще ${hiddenDates}` : ''}`);
+    }
+    previewEl.textContent = lines.join('\n');
+  }
+
+  async function loadDeleteScopePreview(lessonId) {
+    const previewEl = document.getElementById('deleteWarningPreview');
+    if (!previewEl) return;
+    previewEl.textContent = 'Подготовка данных для предупреждения...';
+
+    try {
+      const response = await fetch(`/api/journal/lessons/${lessonId}/delete-scope-preview?scope=course`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        previewEl.textContent = (data && data.error) ? data.error : 'Не удалось получить данные о рисках удаления.';
+        return;
+      }
+      renderDeleteWarningPreview(data);
+    } catch (_error) {
+      previewEl.textContent = 'Ошибка сети при подготовке предупреждения.';
+    }
+  }
+
+  function openDeleteCourseWarning(deleteContext) {
+    pendingCourseDeleteContext = deleteContext || null;
+    const lesson = (deleteContext && deleteContext.lesson) ? deleteContext.lesson : {};
+    const titleEl = document.getElementById('deleteWarningCourseTitle');
+    const semesterEl = document.getElementById('deleteWarningSemesterText');
+    if (titleEl) {
+      titleEl.textContent = lesson.course_title || 'Предмет';
+    }
+    if (semesterEl) {
+      const semesterKey = String(lesson.semester_key || ACTIVE_SEMESTER_KEY || '');
+      semesterEl.textContent = `Семестр: ${semesterLabelFromKey(semesterKey) || ACTIVE_SEMESTER_LABEL || '-'}`;
+    }
+    getDeleteWarningModal().show();
+
+    const lessonId = Number((deleteContext && deleteContext.lessonId) || 0);
+    if (lessonId > 0) {
+      loadDeleteScopePreview(lessonId);
+    }
+  }
+
+  function getSelectedGroupIds() {
+    return Array.from(document.querySelectorAll('#lessonGroupChecks .lesson-group-check:checked'))
+      .map((input) => Number(input.value || 0))
+      .filter((value) => value > 0);
+  }
+
+  function setSelectedGroupIds(groupIds) {
+    const selected = new Set((Array.isArray(groupIds) ? groupIds : [])
+      .map((value) => Number(value || 0))
+      .filter((value) => value > 0));
+    document.querySelectorAll('#lessonGroupChecks .lesson-group-check').forEach((input, index) => {
+      const gid = Number(input.value || 0);
+      input.checked = selected.size ? selected.has(gid) : index === 0;
+    });
+  }
+
+  function lessonGroupIds(lesson) {
+    const fromArray = Array.isArray(lesson && lesson.group_ids) ? lesson.group_ids : [];
+    const ids = fromArray.map((value) => Number(value || 0)).filter((value) => value > 0);
+    if (ids.length) return ids;
+    const single = Number((lesson && lesson.group_id) || 0);
+    return single > 0 ? [single] : [];
+  }
+
+  function setLessonModalMode(isEdit) {
+    const title = document.getElementById('lessonModalTitle');
+    const saveBtn = document.getElementById('saveLessonBtn');
+    const deleteSingleBtn = document.getElementById('deleteSingleLessonBtn');
+    const deleteCourseBtn = document.getElementById('deleteCourseLessonsBtn');
+    if (title) {
+      title.innerHTML = isEdit
+        ? '<i class=\"bi bi-pencil-square me-2\"></i>Изменить занятие'
+        : '<i class=\"bi bi-journal-plus me-2\"></i>Добавить занятие';
+    }
+    if (saveBtn) {
+      saveBtn.innerHTML = isEdit
+        ? '<i class=\"bi bi-check2 me-1\"></i> Сохранить'
+        : '<i class=\"bi bi-check2 me-1\"></i> Добавить';
+    }
+    if (deleteSingleBtn) deleteSingleBtn.classList.toggle('d-none', !isEdit);
+    if (deleteCourseBtn) deleteCourseBtn.classList.toggle('d-none', !isEdit);
+  }
+
+  const today = new Date();
+  const todayIso = toIsoDate(today);
+  const bootstrapDate = fromIsoDate(BOOTSTRAP_SELECTED_DATE);
+  let selectedDateIso = bootstrapDate ? toIsoDate(bootstrapDate) : todayIso;
+  let currentMonthDate = new Date(
+    (bootstrapDate || today).getFullYear(),
+    (bootstrapDate || today).getMonth(),
+    1
+  );
+  let addLessonModalInstance = null;
+  let editingLessonId = 0;
+  let renderRequestSeq = 0;
+  let dateStreamSource = null;
+  let dateStreamIso = '';
+  let datePollTimer = null;
+  let datePollIso = '';
+  let attendanceExportModalInstance = null;
+  let deleteWarningModalInstance = null;
+  let pendingCourseDeleteContext = null;
+  const EXPORT_STUDENT_HINT_DEFAULT = 'Поиск всегда выполняется по всем группам. Если поле пустое, выгрузка будет по всем студентам.';
+  let exportStudentSearchTimer = null;
+  let exportStudentSearchSeq = 0;
+
+  function setCurrentMonthLabel() {
+    const label = currentMonthDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    const monthLabel = document.getElementById('monthLabel');
+    if (monthLabel) {
+      monthLabel.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    }
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    if (!grid) return;
+
+    setCurrentMonthLabel();
+    grid.innerHTML = '';
+
+    const year = currentMonthDate.getFullYear();
+    const month = currentMonthDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const firstWeekdayIndex = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 0; i < firstWeekdayIndex; i += 1) {
+      const empty = document.createElement('button');
+      empty.type = 'button';
+      empty.className = 'calendar-day empty';
+      empty.disabled = true;
+      grid.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const currentDate = new Date(year, month, day);
+      const dateIso = toIsoDate(currentDate);
+      const pairsCount = getPairsCountForDate(dateIso);
+      const isToday = dateIso === todayIso;
+      const isSelected = dateIso === selectedDateIso;
+
+      const dayBtn = document.createElement('button');
+      dayBtn.type = 'button';
+      dayBtn.className = 'calendar-day';
+      if (isToday) dayBtn.classList.add('today');
+      if (isSelected) dayBtn.classList.add('selected');
+
+      const num = document.createElement('div');
+      num.className = 'calendar-day-number';
+      num.textContent = String(day);
+      dayBtn.appendChild(num);
+
+      if (pairsCount > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'pairs-badge';
+        badge.textContent = String(pairsCount);
+        dayBtn.appendChild(badge);
+      }
+
+      dayBtn.addEventListener('click', () => {
+        selectedDateIso = dateIso;
+        setDayMessage('', 'info');
+        renderCalendar();
+        renderSelectedDay();
+      });
+
+      grid.appendChild(dayBtn);
+    }
+
+    while (grid.children.length % 7 !== 0) {
+      const empty = document.createElement('button');
+      empty.type = 'button';
+      empty.className = 'calendar-day empty';
+      empty.disabled = true;
+      grid.appendChild(empty);
+    }
+  }
+
+  async function renderSelectedDay() {
+    const titleEl = document.getElementById('selectedDateTitle');
+    const metaEl = document.getElementById('selectedDateMeta');
+    const badgeEl = document.getElementById('selectedDatePairsBadge');
+    const listEl = document.getElementById('dayLessonsList');
+    if (!titleEl || !metaEl || !badgeEl || !listEl) return;
+    const requestSeq = ++renderRequestSeq;
+
+    const date = fromIsoDate(selectedDateIso);
+    if (!date) {
+      closeDateStream();
+      titleEl.textContent = '-';
+      metaEl.textContent = '';
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = '<div class="text-center text-muted py-5">Выберите дату</div>';
+      return;
+    }
+
+    const dayId = getDayIdByDate(date);
+    const dayName = DAY_NAMES[dayId] || '';
+    const semesterInfo = getDateAcademicInfo(date);
+    const dateTitle = formatRuDate(selectedDateIso);
+
+    titleEl.textContent = dateTitle.charAt(0).toUpperCase() + dateTitle.slice(1);
+    if (!semesterInfo) {
+      metaEl.textContent = `${dayName} | Вне учебного периода`;
+    } else if (semesterInfo.isTeachingPeriod) {
+      metaEl.textContent = `${dayName} | Неделя ${semesterInfo.weekNumber} (${parityWithLabel(semesterInfo.weekParity)})`;
+    } else {
+      metaEl.textContent = `${dayName} | ${semesterInfo.stageLabel}`;
+    }
+
+    if (dayId === 7) {
+      closeDateStream();
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = '<div class="text-center text-muted py-5">В воскресенье пары не проводятся</div>';
+      return;
+    }
+
+    if (!semesterInfo) {
+      closeDateStream();
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = '<div class="text-center text-muted py-5">В июле и августе пары не проводятся</div>';
+      return;
+    }
+
+    if (semesterInfo.semesterKey !== ACTIVE_SEMESTER_KEY) {
+      closeDateStream();
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = `<div class="text-center text-muted py-5">Дата вне активного семестра (${ACTIVE_SEMESTER_LABEL})</div>`;
+      return;
+    }
+
+    if (!semesterInfo.isTeachingPeriod) {
+      closeDateStream();
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = `<div class="text-center text-muted py-5">${stageDisabledMessage(semesterInfo)}</div>`;
+      return;
+    }
+
+    openDateStream(selectedDateIso);
+    listEl.innerHTML = '<div class="text-center text-muted py-4">Загрузка занятий...</div>';
+
+    try {
+      const lessons = await loadLessonsForDate(selectedDateIso);
+      if (requestSeq !== renderRequestSeq) return;
+
+      const pairCount = new Set(lessons.map((lesson) => Number(lesson.pair_number))).size;
+      badgeEl.textContent = `Количество занятий: ${pairCount}`;
+
+      listEl.innerHTML = '';
+      const lessonsByPair = new Map();
+      lessons.forEach((lesson) => {
+        const pairNum = Number(lesson.pair_number || 0);
+        if (!lessonsByPair.has(pairNum)) lessonsByPair.set(pairNum, []);
+        lessonsByPair.get(pairNum).push(lesson);
+      });
+
+      const orderedPairs = Array.from(new Set([
+        ...PAIR_SLOTS.map((slot) => Number(slot.number || 0)).filter((num) => num > 0),
+        ...Array.from(lessonsByPair.keys()).filter((num) => Number(num) > 0)
+      ])).sort((a, b) => a - b);
+      if (!orderedPairs.length) {
+        for (let pair = 1; pair <= 7; pair += 1) orderedPairs.push(pair);
+      }
+
+      const renderLessonItem = (lesson) => {
+        const pairNum = Number(lesson.pair_number || 0);
+        const pairInfo = pairByNumber[pairNum] || {};
+        const pairLabel = pairInfo.label || `${pairNum} пара`;
+        const pairTime = pairInfo.time || '';
+
+        const item = document.createElement('div');
+        item.className = 'lesson-item clickable';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'd-flex justify-content-between align-items-start gap-2';
+
+        const time = document.createElement('div');
+        time.className = 'lesson-time';
+        time.textContent = pairTime ? `${pairLabel} | ${pairTime}` : pairLabel;
+
+        const tools = document.createElement('div');
+        tools.className = 'lesson-tools';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'lesson-action-btn';
+        editBtn.title = 'Изменить занятие';
+        editBtn.innerHTML = '<i class=\"bi bi-pencil\"></i>';
+        editBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openEditLessonModal(lesson);
+        });
+        tools.appendChild(editBtn);
+
+        topRow.appendChild(time);
+        topRow.appendChild(tools);
+
+        const title = document.createElement('div');
+        title.className = 'lesson-title';
+        title.textContent = lesson.course_title || `Предмет #${lesson.course_id}`;
+
+        const meta1 = document.createElement('div');
+        meta1.className = 'lesson-meta';
+        meta1.textContent = `Группа: ${lesson.group_name || `Группа #${lesson.group_id}`} | Аудитория: ${lesson.room || '-'}`;
+
+        const meta2 = document.createElement('div');
+        meta2.className = 'lesson-meta';
+        meta2.textContent = `Студентов: ${Number(lesson.student_count || 0)} | Присутствовало: ${Number(lesson.present_count || 0)} | Отсутствовало: ${Number(lesson.absent_count || 0)} | Отсутствовало (уваж.): ${Number(lesson.excused_count || 0)}`;
+
+        const hint = document.createElement('div');
+        hint.className = 'lesson-open-hint';
+        hint.textContent = 'Нажмите, чтобы открыть страницу посещаемости';
+
+        item.appendChild(topRow);
+        item.appendChild(title);
+        item.appendChild(meta1);
+        item.appendChild(meta2);
+        item.appendChild(hint);
+        item.addEventListener('click', () => {
+          window.location.href = buildLessonAttendanceUrl(lesson, selectedDateIso);
+        });
+        listEl.appendChild(item);
+      };
+
+      const renderGapItem = (pairNum) => {
+        const pairInfo = pairByNumber[pairNum] || {};
+        const pairLabel = pairInfo.label || `${pairNum} пара`;
+        const pairTime = pairInfo.time || '';
+        const gap = document.createElement('div');
+        gap.className = 'lesson-gap-item';
+
+        const time = document.createElement('div');
+        time.className = 'lesson-time';
+        time.textContent = pairTime ? `${pairLabel} | ${pairTime}` : pairLabel;
+
+        const text = document.createElement('div');
+        text.className = 'lesson-meta';
+        text.textContent = 'Пара отсутствует';
+
+        gap.appendChild(time);
+        gap.appendChild(text);
+        listEl.appendChild(gap);
+      };
+
+      for (const pair of orderedPairs) {
+        const pairLessons = lessonsByPair.get(pair) || [];
+        if (!pairLessons.length) {
+          renderGapItem(pair);
+          continue;
+        }
+        pairLessons.forEach((lesson) => renderLessonItem(lesson));
+      }
+    } catch (error) {
+      if (requestSeq !== renderRequestSeq) return;
+      badgeEl.textContent = 'Количество занятий: 0';
+      listEl.innerHTML = '<div class="text-center text-danger py-5">Не удалось загрузить занятия</div>';
+    }
+  }
+
+  function shiftMonth(offset) {
+    currentMonthDate = new Date(
+      currentMonthDate.getFullYear(),
+      currentMonthDate.getMonth() + offset,
+      1
+    );
+
+    const isCurrentMonthNow =
+      currentMonthDate.getFullYear() === today.getFullYear() &&
+      currentMonthDate.getMonth() === today.getMonth();
+
+    selectedDateIso = isCurrentMonthNow
+      ? todayIso
+      : toIsoDate(new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 1));
+
+    setDayMessage('', 'info');
+    renderCalendar();
+    renderSelectedDay();
+  }
+
+  function getAddLessonModal() {
+    if (!addLessonModalInstance) {
+      addLessonModalInstance = new bootstrap.Modal(document.getElementById('addLessonModal'));
+    }
+    return addLessonModalInstance;
+  }
+
+  function updateDerivedDateInfo() {
+    const dateInput = document.getElementById('lessonDate');
+    const infoEl = document.getElementById('derivedDateInfo');
+    const saveBtn = document.getElementById('saveLessonBtn');
+    if (!dateInput || !infoEl || !saveBtn) return false;
+
+    const date = fromIsoDate(dateInput.value);
+    if (!date) {
+      infoEl.textContent = 'Выберите корректную дату';
+      infoEl.className = 'mt-2 small text-danger';
+      saveBtn.disabled = true;
+      return false;
+    }
+
+    const dayId = getDayIdByDate(date);
+    const dayName = DAY_NAMES[dayId] || '';
+    const semesterInfo = getDateAcademicInfo(date);
+
+    if (dayId === 7) {
+      infoEl.textContent = 'Воскресенье: пары не проводятся. Выберите дату с понедельника по субботу.';
+      infoEl.className = 'mt-2 small text-danger';
+      saveBtn.disabled = true;
+      return false;
+    }
+
+    if (!semesterInfo) {
+      infoEl.textContent = 'В июле и августе пары не проводятся.';
+      infoEl.className = 'mt-2 small text-danger';
+      saveBtn.disabled = true;
+      return false;
+    }
+
+    if (!semesterInfo.isTeachingPeriod) {
+      infoEl.textContent = stageDisabledMessage(semesterInfo);
+      infoEl.className = 'mt-2 small text-danger';
+      saveBtn.disabled = true;
+      return false;
+    }
+
+    if (semesterInfo.semesterKey !== ACTIVE_SEMESTER_KEY) {
+      infoEl.textContent = `Доступен только активный семестр: ${ACTIVE_SEMESTER_LABEL}`;
+      infoEl.className = 'mt-2 small text-danger';
+      saveBtn.disabled = true;
+      return false;
+    }
+
+    infoEl.textContent = `${dayName} | Неделя ${semesterInfo.weekNumber} (${parityWithLabel(semesterInfo.weekParity)}) | ${semesterInfo.semesterLabel}`;
+    infoEl.className = 'mt-2 small text-muted';
+    saveBtn.disabled = false;
+    return true;
+  }
+
+  async function loadModalStudents() {
+    const area = document.getElementById('modalStudentsArea');
+    const countEl = document.getElementById('modalStudentsCount');
+    if (!area || !countEl) return;
+
+    const selectedIds = getSelectedGroupIds();
+
+    if (!selectedIds.length) {
+      area.innerHTML = '<div class="text-center text-muted mt-4 mb-4">Выберите группу или несколько групп</div>';
+      countEl.textContent = '';
+      return;
+    }
+
+    area.innerHTML = '<div class="text-center text-muted mt-4 mb-4">Загрузка...</div>';
+    countEl.textContent = '';
+
+    try {
+      const response = await fetch(`/api/journal/groups/students?ids=${encodeURIComponent(selectedIds.join(','))}`);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        area.innerHTML = '<div class="text-center text-danger mt-4 mb-4">Не удалось загрузить студентов</div>';
+        return;
+      }
+
+      const groupsPayload = Array.isArray(data.groups) ? data.groups : [];
+      const totalStudents = Number(data.total_students || 0);
+      countEl.textContent = `Групп: ${groupsPayload.length} | Студентов: ${totalStudents}`;
+
+      if (!groupsPayload.length) {
+        area.innerHTML = '<div class="text-center text-muted mt-4 mb-4">По выбранным группам нет данных</div>';
+        return;
+      }
+
+      area.innerHTML = '';
+      groupsPayload.forEach((entry) => {
+        const group = entry.group || {};
+        const students = Array.isArray(entry.students) ? entry.students : [];
+
+        const groupBlock = document.createElement('div');
+        groupBlock.className = 'mb-3';
+
+        const title = document.createElement('div');
+        title.className = 'fw-semibold small mb-1';
+        title.textContent = `${group.name || 'Группа'} (${students.length})`;
+        groupBlock.appendChild(title);
+
+        if (!students.length) {
+          const empty = document.createElement('div');
+          empty.className = 'small text-muted';
+          empty.textContent = 'В группе нет студентов';
+          groupBlock.appendChild(empty);
+        } else {
+          const ul = document.createElement('ul');
+          ul.className = 'list-group list-group-flush border rounded-2';
+          students.forEach((student, index) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item py-2';
+            li.textContent = `${index + 1}. ${student.fio}`;
+            ul.appendChild(li);
+          });
+          groupBlock.appendChild(ul);
+        }
+
+        area.appendChild(groupBlock);
+      });
+    } catch (error) {
+      area.innerHTML = '<div class="text-center text-danger mt-4 mb-4">Ошибка сети</div>';
+    }
+  }
+  function openAddLessonModal() {
+    if (!CAN_CREATE_LESSON) return;
+
+    editingLessonId = 0;
+    setLessonModalMode(false);
+
+    const dateInput = document.getElementById('lessonDate');
+    const roomInput = document.getElementById('lessonRoom');
+    const pairInput = document.getElementById('lessonPair');
+    if (dateInput) dateInput.value = selectedDateIso || todayIso;
+    if (roomInput) roomInput.value = '';
+    if (pairInput && pairInput.options.length) pairInput.selectedIndex = 0;
+    setSelectedGroupIds([]);
+
+    setModalMessage('', 'info');
+    updateDerivedDateInfo();
+    loadModalStudents();
+    getAddLessonModal().show();
+  }
+
+  function openEditLessonModal(lesson) {
+    if (!CAN_CREATE_LESSON || !lesson) return;
+    editingLessonId = Number(lesson.id || 0);
+    if (!editingLessonId) return;
+    setLessonModalMode(true);
+
+    const dateInput = document.getElementById('lessonDate');
+    const pairInput = document.getElementById('lessonPair');
+    const courseInput = document.getElementById('lessonCourse');
+    const roomInput = document.getElementById('lessonRoom');
+
+    if (dateInput) dateInput.value = selectedDateIso || todayIso;
+    if (pairInput) pairInput.value = String(Number(lesson.pair_number || 0) || '');
+    if (courseInput) courseInput.value = String(Number(lesson.course_id || 0) || '');
+    if (roomInput) roomInput.value = String(lesson.room || '');
+
+    setSelectedGroupIds(lessonGroupIds(lesson));
+
+    setModalMessage('', 'info');
+    updateDerivedDateInfo();
+    loadModalStudents();
+    getAddLessonModal().show();
+  }
+
+  function upsertLessonInCache(lessonPayload) {
+    if (!lessonPayload || typeof lessonPayload !== 'object') return;
+    const lessonId = Number(lessonPayload.id || 0);
+    if (!lessonId) return;
+    const existingIndex = LESSONS.findIndex((item) => Number(item.id) === lessonId);
+    if (existingIndex >= 0) {
+      LESSONS[existingIndex] = lessonPayload;
+    } else {
+      LESSONS.push(lessonPayload);
+    }
+  }
+
+  function removeLessonsFromCacheByIds(ids) {
+    const setIds = new Set((Array.isArray(ids) ? ids : [])
+      .map((value) => Number(value || 0))
+      .filter((value) => value > 0));
+    if (!setIds.size) return;
+    for (let i = LESSONS.length - 1; i >= 0; i -= 1) {
+      if (setIds.has(Number(LESSONS[i].id || 0))) {
+        LESSONS.splice(i, 1);
+      }
+    }
+  }
+
+  async function saveLesson() {
+    if (!CAN_CREATE_LESSON) return;
+
+    const dateInput = document.getElementById('lessonDate');
+    const pairInput = document.getElementById('lessonPair');
+    const courseInput = document.getElementById('lessonCourse');
+    const roomInput = document.getElementById('lessonRoom');
+    const saveBtn = document.getElementById('saveLessonBtn');
+
+    if (!dateInput || !pairInput || !courseInput || !roomInput || !saveBtn) return;
+    if (!updateDerivedDateInfo()) return;
+
+    const date = fromIsoDate(dateInput.value);
+    if (!date) return;
+
+    const dayId = getDayIdByDate(date);
+    if (dayId === 7) {
+      setModalMessage('Воскресенье недоступно для добавления пары', 'warning');
+      return;
+    }
+
+    const pairNumber = Number(pairInput.value || 0);
+    const courseId = Number(courseInput.value || 0);
+    const groupIds = getSelectedGroupIds();
+    const room = String(roomInput.value || '').trim();
+
+    if (!pairNumber || !courseId || !groupIds.length) {
+      setModalMessage('Заполните обязательные поля', 'warning');
+      return;
+    }
+    if (!room) {
+      setModalMessage('Укажите аудиторию', 'warning');
+      return;
+    }
+
+    const oldText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Сохранение...';
+    setModalMessage('', 'info');
+
+    try {
+      const isEdit = editingLessonId > 0;
+      const endpoint = isEdit ? `/api/journal/lessons/${editingLessonId}/update` : '/api/journal/lessons';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({
+          date: dateInput.value,
+          pair_number: pairNumber,
+          course_id: courseId,
+          group_ids: groupIds,
+          room: room
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setModalMessage(data.error || (isEdit ? 'Не удалось обновить занятие' : 'Не удалось добавить занятие'), 'danger');
+        return;
+      }
+
+      const resultLessons = Array.isArray(data.lessons)
+        ? data.lessons
+        : ((data.lesson && typeof data.lesson === 'object') ? [data.lesson] : []);
+      resultLessons.forEach((lessonItem) => upsertLessonInCache(lessonItem));
+
+      if (isEdit && data.lesson && typeof data.lesson === 'object') {
+        upsertLessonInCache(data.lesson);
+      }
+
+      editingLessonId = 0;
+      selectedDateIso = toIsoDate(date);
+      currentMonthDate = new Date(date.getFullYear(), date.getMonth(), 1);
+
+      getAddLessonModal().hide();
+      setDayMessage(isEdit ? 'Занятие обновлено' : `Добавлено занятий: ${resultLessons.length || 1}`, 'success');
+      renderCalendar();
+      renderSelectedDay();
+    } catch (error) {
+      setModalMessage('Ошибка сети при сохранении занятия', 'danger');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = oldText;
+    }
+  }
+
+  async function executeDeleteLessonScope(deleteContext) {
+    const context = deleteContext || {};
+    const lessonId = Number(context.lessonId || 0);
+    const lesson = context.lesson || null;
+    const dateValue = String(context.dateValue || '');
+    const isCourseDelete = Boolean(context.isCourseDelete);
+    if (!lessonId || !lesson) return;
+
+    const buttonId = isCourseDelete ? 'deleteCourseLessonsBtn' : 'deleteSingleLessonBtn';
+    const btn = document.getElementById(buttonId);
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    try {
+      const response = await fetch(`/api/journal/lessons/${lessonId}/delete-scope`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({
+          date: dateValue,
+          scope: isCourseDelete ? 'course' : 'single'
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setModalMessage((data && data.error) ? data.error : 'Не удалось удалить занятие', 'danger');
+        return;
+      }
+
+      const deletedIds = Array.isArray(data.deleted_ids) ? data.deleted_ids : [];
+      if (deletedIds.length) {
+        removeLessonsFromCacheByIds(deletedIds);
+      } else if (isCourseDelete) {
+        const deletedCourseId = Number(data.course_id || lesson.course_id || 0);
+        for (let i = LESSONS.length - 1; i >= 0; i -= 1) {
+          if (Number(LESSONS[i].course_id || 0) === deletedCourseId) {
+            LESSONS.splice(i, 1);
+          }
+        }
+      } else {
+        removeLessonsFromCacheByIds([lessonId]);
+      }
+
+      editingLessonId = 0;
+      getAddLessonModal().hide();
+      setDayMessage(String(data.message || 'Удаление выполнено'), 'info');
+      renderCalendar();
+      renderSelectedDay();
+    } catch (_error) {
+      setModalMessage('Ошибка сети при удалении занятия', 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
+    }
+  }
+
+  async function confirmPendingCourseDelete() {
+    const context = pendingCourseDeleteContext;
+    if (!context) return;
+    pendingCourseDeleteContext = null;
+    getDeleteWarningModal().hide();
+    await executeDeleteLessonScope(context);
+  }
+
+  async function deleteLessonFromEdit(scope) {
+    const lessonId = Number(editingLessonId || 0);
+    if (!lessonId) return;
+
+    const lesson = LESSONS.find((item) => Number(item.id) === lessonId);
+    if (!lesson) {
+      setModalMessage('Занятие не найдено в списке', 'danger');
+      return;
+    }
+
+    const dateInput = document.getElementById('lessonDate');
+    const dateValue = (dateInput && dateInput.value) ? String(dateInput.value) : String(selectedDateIso || '');
+    const isCourseDelete = String(scope || '') === 'course';
+    const deleteContext = {
+      lessonId,
+      lesson,
+      dateValue,
+      isCourseDelete
+    };
+
+    if (isCourseDelete) {
+      openDeleteCourseWarning(deleteContext);
+      return;
+    }
+
+    const confirmText = `Удалить только это занятие "${lesson.course_title || 'предмет'}"?`;
+    if (!confirm(confirmText)) return;
+
+    await executeDeleteLessonScope(deleteContext);
+  }
+
+  async function deleteLesson(lessonId) {
+    const lesson = LESSONS.find((item) => Number(item.id) === Number(lessonId));
+    if (!lesson) return;
+
+    const label = `${lesson.course_title || 'предмет'} (${lesson.group_name || 'группа'})`;
+    if (!confirm(`Удалить занятие "${label}"?`)) return;
+
+    try {
+      const response = await fetch(`/api/journal/lessons/${lessonId}/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({ date: selectedDateIso })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setDayMessage(data.error || 'Не удалось удалить занятие', 'danger');
+        return;
+      }
+
+      const idx = LESSONS.findIndex((item) => Number(item.id) === Number(lessonId));
+      if (idx >= 0) LESSONS.splice(idx, 1);
+
+      setDayMessage('Занятие удалено', 'info');
+      renderCalendar();
+      renderSelectedDay();
+    } catch (error) {
+      setDayMessage('Ошибка сети при удалении занятия', 'danger');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const prevBtn = document.getElementById('prevMonthBtn');
+    const nextBtn = document.getElementById('nextMonthBtn');
+    const openAddBtn = document.getElementById('openAddLessonBtn');
+    const openExportBtn = document.getElementById('openAttendanceExportBtn');
+    const saveBtn = document.getElementById('saveLessonBtn');
+    const deleteSingleBtn = document.getElementById('deleteSingleLessonBtn');
+    const deleteCourseBtn = document.getElementById('deleteCourseLessonsBtn');
+    const confirmDeleteCourseBtn = document.getElementById('confirmDeleteCourseBtn');
+    const dateInput = document.getElementById('lessonDate');
+    const groupChecks = document.getElementById('lessonGroupChecks');
+    const addLessonModalEl = document.getElementById('addLessonModal');
+    const exportModalEl = document.getElementById('attendanceExportModal');
+    const exportForm = document.getElementById('attendanceExportForm');
+    const deleteWarningModalEl = document.getElementById('deleteCourseWarningModal');
+
+    const exportGroupsSelectAll = document.getElementById('exportGroupsSelectAll');
+    const exportGroupsClearAll = document.getElementById('exportGroupsClearAll');
+    const exportCoursesSelectAll = document.getElementById('exportCoursesSelectAll');
+    const exportCoursesClearAll = document.getElementById('exportCoursesClearAll');
+    const exportGroupsList = document.getElementById('exportGroupsList');
+    const exportStudentInput = document.getElementById('exportStudentQuery');
+    const exportStudentLookup = document.getElementById('exportStudentLookup');
+    const exportStudentId = document.getElementById('exportStudentId');
+
+    if (prevBtn) prevBtn.addEventListener('click', () => shiftMonth(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => shiftMonth(1));
+    if (openAddBtn) openAddBtn.addEventListener('click', openAddLessonModal);
+    if (openExportBtn) openExportBtn.addEventListener('click', openAttendanceExportModal);
+    if (saveBtn) saveBtn.addEventListener('click', saveLesson);
+    if (deleteSingleBtn) deleteSingleBtn.addEventListener('click', () => deleteLessonFromEdit('single'));
+    if (deleteCourseBtn) deleteCourseBtn.addEventListener('click', () => deleteLessonFromEdit('course'));
+    if (confirmDeleteCourseBtn) confirmDeleteCourseBtn.addEventListener('click', confirmPendingCourseDelete);
+    if (dateInput) dateInput.addEventListener('change', updateDerivedDateInfo);
+    if (exportForm) exportForm.addEventListener('submit', validateAttendanceExportForm);
+    if (exportGroupsSelectAll) exportGroupsSelectAll.addEventListener('click', () => setChecks('.export-group-check', true));
+    if (exportGroupsClearAll) exportGroupsClearAll.addEventListener('click', () => setChecks('.export-group-check', false));
+    if (exportCoursesSelectAll) exportCoursesSelectAll.addEventListener('click', () => setChecks('.export-course-check', true));
+    if (exportCoursesClearAll) exportCoursesClearAll.addEventListener('click', () => setChecks('.export-course-check', false));
+    if (exportGroupsList) {
+      exportGroupsList.addEventListener('change', () => {
+        const sid = Number((exportStudentId && exportStudentId.value) || 0);
+        if (sid > 0) {
+          const selectedGid = Number((exportStudentInput && exportStudentInput.dataset.selectedGroupId) || 0);
+          if (selectedGid > 0 && !checkedExportGroupIds().includes(selectedGid)) {
+            clearExportStudentSelection({ keepText: true });
+            setExportStudentHint('Фильтр по конкретному студенту снят, потому что его группа не выбрана.');
+          }
+        }
+        if (exportStudentInput && String(exportStudentInput.value || '').trim().length >= 2) {
+          scheduleExportStudentSuggest(0);
+        }
+      });
+    }
+    if (exportStudentInput) {
+      exportStudentInput.addEventListener('input', () => {
+        const selectedName = String(exportStudentInput.dataset.selectedName || '').trim();
+        const currentValue = String(exportStudentInput.value || '').trim();
+        if (selectedName && currentValue !== selectedName) {
+          if (exportStudentId) exportStudentId.value = '';
+          exportStudentInput.dataset.selectedId = '';
+          exportStudentInput.dataset.selectedGroupId = '';
+          exportStudentInput.dataset.selectedName = '';
+          setExportStudentHint(EXPORT_STUDENT_HINT_DEFAULT);
+        }
+        scheduleExportStudentSuggest();
+      });
+      exportStudentInput.addEventListener('focus', () => {
+        if (String(exportStudentInput.value || '').trim().length >= 2) {
+          scheduleExportStudentSuggest(0);
+        }
+      });
+      exportStudentInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeExportStudentSuggest();
+          return;
+        }
+        if (event.key === 'Enter') {
+          const first = document.querySelector('#exportStudentSuggest button[data-student-id]');
+          if (first) {
+            event.preventDefault();
+            first.click();
+          }
+        }
+      });
+    }
+    document.addEventListener('click', (event) => {
+      if (!exportStudentLookup) return;
+      const target = event.target;
+      if (target instanceof Node && exportStudentLookup.contains(target)) return;
+      closeExportStudentSuggest();
+    });
+    if (groupChecks) {
+      groupChecks.addEventListener('change', (event) => {
+        const target = event.target;
+        if (target && target.classList && target.classList.contains('lesson-group-check')) {
+          loadModalStudents();
+        }
+      });
+    }
+    if (addLessonModalEl) {
+      addLessonModalEl.addEventListener('hidden.bs.modal', () => {
+        editingLessonId = 0;
+        setLessonModalMode(false);
+        setModalMessage('', 'info');
+      });
+    }
+    if (exportModalEl) {
+      exportModalEl.addEventListener('hidden.bs.modal', () => {
+        clearExportStudentSelection({ keepText: false });
+        closeExportStudentSuggest();
+        if (exportStudentSearchTimer) {
+          clearTimeout(exportStudentSearchTimer);
+          exportStudentSearchTimer = null;
+        }
+        exportStudentSearchSeq += 1;
+        setExportModalMessage('', 'info');
+      });
+    }
+    if (deleteWarningModalEl) {
+      deleteWarningModalEl.addEventListener('hidden.bs.modal', () => {
+        pendingCourseDeleteContext = null;
+        const previewEl = document.getElementById('deleteWarningPreview');
+        if (previewEl) {
+          previewEl.textContent = 'Подготовка данных для предупреждения...';
+        }
+      });
+    }
+
+    renderCalendar();
+    renderSelectedDay();
+    window.addEventListener('beforeunload', closeDateStream);
+  });
+</script>
+
+</body>
+</html>

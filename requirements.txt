@@ -3,3 +3,4 @@ Flask-SQLAlchemy>=3.1
 SQLAlchemy>=2.0
 Pillow>=10.0
 openpyxl>=3.1
+segno>=1.6

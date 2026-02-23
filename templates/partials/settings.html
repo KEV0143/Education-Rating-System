@@ -4,7 +4,7 @@
 </button>
 {%- endmacro %}
 
-{% macro settings_modal(app_version) -%}
+{% macro settings_modal(app_version, show_archive=False, archive_target='') -%}
 <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -22,6 +22,20 @@
             <span class="ms-2" data-theme-toggle-label>Светлая</span>
           </button>
         </div>
+
+        {% if show_archive %}
+        <div class="d-flex justify-content-between align-items-center gap-3 mt-3">
+          <span class="fw-semibold">Архив</span>
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            data-settings-open-archive="1"
+            data-archive-target="{{ archive_target if archive_target else '#archiveModal' }}"
+          >
+            <i class="bi bi-archive me-1"></i> Открыть
+          </button>
+        </div>
+        {% endif %}
 
         <hr class="my-3">
 
@@ -92,13 +106,49 @@
       btn.addEventListener('click', toggleTheme);
     }
 
+    function initArchiveShortcuts() {
+      const buttons = document.querySelectorAll('[data-settings-open-archive="1"]');
+      if (!buttons.length) return;
+
+      buttons.forEach((btn) => {
+        if (btn.dataset.archiveBound === '1') return;
+        btn.dataset.archiveBound = '1';
+
+        btn.addEventListener('click', () => {
+          if (typeof bootstrap === 'undefined') return;
+
+          const targetSelector = btn.dataset.archiveTarget || '#archiveModal';
+          const settingsEl = document.getElementById('settingsModal');
+          if (!settingsEl) return;
+
+          const settingsModal =
+            bootstrap.Modal.getInstance(settingsEl) || new bootstrap.Modal(settingsEl);
+          settingsModal.hide();
+
+          window.setTimeout(() => {
+            const archiveEl = document.querySelector(targetSelector);
+            if (!archiveEl) return;
+
+            const archiveModal = bootstrap.Modal.getOrCreateInstance
+              ? bootstrap.Modal.getOrCreateInstance(archiveEl)
+              : (bootstrap.Modal.getInstance(archiveEl) || new bootstrap.Modal(archiveEl));
+            archiveModal.show();
+          }, 200);
+        });
+      });
+    }
+
     window.SettingsTheme = {
       initThemeToggle,
       updateThemeToggleButton,
       toggleTheme,
+      initArchiveShortcuts,
     };
 
-    document.addEventListener('DOMContentLoaded', initThemeToggle);
+    document.addEventListener('DOMContentLoaded', () => {
+      initThemeToggle();
+      initArchiveShortcuts();
+    });
   })(window, document);
 </script>
 {%- endmacro %}

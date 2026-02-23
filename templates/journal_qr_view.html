@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>QR | {{ course.title }}</title>
+
+  <script>
+    (() => {
+      const saved = localStorage.getItem('rs-theme');
+      const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    :root{
+      --rs-page-bg: #f8f9fa;
+      --rs-text: #333;
+      --rs-card-bg: #ffffff;
+      --rs-border: #eee;
+      --rs-soft-border: #dee2e6;
+      --rs-shadow: rgba(0,0,0,0.04);
+    }
+    :root[data-bs-theme="dark"]{
+      --rs-page-bg: #0f1216;
+      --rs-text: #e9ecef;
+      --rs-card-bg: #151a21;
+      --rs-border: rgba(255,255,255,0.08);
+      --rs-soft-border: rgba(255,255,255,0.14);
+      --rs-shadow: rgba(0,0,0,0.35);
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% 12%, rgba(13,110,253,.12), transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(25,135,84,.10), transparent 45%),
+        var(--rs-page-bg);
+      color: var(--rs-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 1rem;
+    }
+    .qr-shell {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      border-radius: 14px;
+      border: 1px solid var(--rs-border);
+      box-shadow: 0 10px 32px var(--rs-shadow);
+      background: var(--rs-card-bg);
+      padding: 16px;
+    }
+    .qr-large-wrap {
+      border: 1px dashed var(--rs-soft-border);
+      border-radius: 12px;
+      min-height: 470px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,.35);
+      padding: 14px;
+    }
+    :root[data-bs-theme="dark"] .qr-large-wrap {
+      background: rgba(255,255,255,.03);
+    }
+    .qr-large {
+      width: min(88vw, 500px);
+      max-width: 500px;
+      height: auto;
+      border-radius: 12px;
+      border: 1px solid var(--rs-soft-border);
+      background: #fff;
+    }
+    .meta-line {
+      color: #6c757d;
+      font-size: .92rem;
+      line-height: 1.3;
+    }
+    .mono-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: .74rem;
+    }
+    .qr-checkin-counter {
+      margin-top: 8px;
+      text-align: center;
+      font-size: .9rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #5f6f82;
+    }
+    :root[data-bs-theme="dark"] .qr-checkin-counter {
+      color: rgba(255,255,255,.74);
+    }
+    :root[data-bs-theme="dark"] .meta-line {
+      color: rgba(255,255,255,.72);
+    }
+  </style>
+</head>
+<body>
+{% set day_names = {1:'Понедельник', 2:'Вторник', 3:'Среда', 4:'Четверг', 5:'Пятница', 6:'Суббота'} %}
+
+<div
+  class="qr-shell"
+  id="qrViewRoot"
+  data-lesson-id="{{ lesson.id }}"
+  data-lesson-date="{{ lesson_date_iso }}"
+>
+  <div class="d-flex justify-content-between align-items-start gap-2 mb-3 flex-wrap">
+    <div>
+      <h2 class="h4 fw-bold mb-1">{{ course.title }}</h2>
+      <div class="meta-line">Группа: {{ group_names_display }} | Аудитория: {{ lesson.room }} | {{ pair_info.label }} {% if pair_info.time %}| {{ pair_info.time }}{% endif %}</div>
+      <div class="meta-line">{{ day_names.get(lesson.day_of_week, '-') }}, {{ lesson_date_iso }} | Неделя {{ lesson_ctx.week_number }} ({{ 'I нечётная' if lesson_ctx.week_parity == 'I' else 'II чётная' }})</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('journal_lesson_page', lesson_id=lesson.id, date=lesson_date_iso, group_id=active_group_id) }}" class="btn btn-outline-secondary btn-sm" target="_self">
+        <i class="bi bi-arrow-left me-1"></i>К занятию
+      </a>
+      <span id="tunnelStatusBadge" class="badge mono-badge {{ 'text-bg-success' if qr.tunnel.active else 'text-bg-secondary' }}">{{ 'PUBLIC ACTIVE' if qr.tunnel.active else 'LOCAL ONLY' }}</span>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="small text-muted">
+      До обновления ссылки:
+      <span id="refreshTimer" data-next-refresh="{{ qr.tunnel.next_refresh_epoch if qr.tunnel.next_refresh_epoch else '' }}" data-refresh-interval="{{ qr.tunnel.refresh_interval_seconds if qr.tunnel.refresh_interval_seconds else '' }}">-</span>
+    </div>
+    <div id="qrLinkBox" class="small text-break {% if not qr.effective_checkin_url %}d-none{% endif %}">
+      <a id="effectiveCheckinUrl" href="{{ qr.effective_checkin_url if qr.effective_checkin_url else '#' }}" target="_blank" rel="noopener noreferrer">{{ qr.effective_checkin_url if qr.effective_checkin_url else '-' }}</a>
+    </div>
+  </div>
+  <div class="qr-large-wrap mb-2">
+    {% if qr.qr_data_uri %}
+      <img id="qrImage" class="qr-large" src="{{ qr.qr_data_uri }}" alt="QR код">
+    {% else %}
+      <img id="qrImage" class="qr-large d-none" src="" alt="QR код">
+      <div id="qrEmpty" class="text-muted">QR доступен только при статусе PUBLIC ACTIVE<span class="d-block">(Для включения статуса Public нажмите кнопку "Открыть")</span></div>
+    {% endif %}
+  </div>
+  <div class="qr-checkin-counter" id="qrCheckinCounter">Отметилось: {{ qr.checkin_summary.present_count if qr.checkin_summary else 0 }} из {{ qr.checkin_summary.total_students if qr.checkin_summary else 0 }}</div>
+
+  <div id="qrError" class="alert alert-warning py-2 mb-0 {% if not qr.qr_error %}d-none{% endif %}">{{ qr.qr_error }}</div>
+</div>
+
+<script id="qrViewBootstrap" type="application/json">
+  {{ {
+    "lesson_id": lesson.id,
+    "lesson_date": lesson_date_iso
+  } | tojson }}
+</script>
+<script>
+  const BOOTSTRAP_RAW = (document.getElementById('qrViewBootstrap') || { textContent: '{}' }).textContent || '{}';
+  let BOOTSTRAP = {};
+  try {
+    BOOTSTRAP = JSON.parse(BOOTSTRAP_RAW);
+  } catch (_err) {
+    BOOTSTRAP = {};
+  }
+
+  const LESSON_ID = Number(BOOTSTRAP.lesson_id || 0);
+  const LESSON_DATE = String(BOOTSTRAP.lesson_date || '');
+  let tunnelNextRefresh = 0;
+  let tunnelRefreshInterval = 0;
+  let tunnelStream = null;
+  let qrPollTimer = null;
+
+  function applyTunnelState(tunnel) {
+    if (!tunnel) return;
+    const badge = document.getElementById('tunnelStatusBadge');
+    if (badge) {
+      const active = Boolean(tunnel.active);
+      badge.className = `badge mono-badge ${active ? 'text-bg-success' : 'text-bg-secondary'}`;
+      badge.textContent = active ? 'PUBLIC ACTIVE' : 'LOCAL ONLY';
+    }
+    tunnelNextRefresh = Number(tunnel.next_refresh_epoch || 0);
+    tunnelRefreshInterval = Number(tunnel.refresh_interval_seconds || 0);
+  }
+
+  function renderCheckinSummary(summary) {
+    const box = document.getElementById('qrCheckinCounter');
+    if (!box) return;
+    const safe = summary || {};
+    const present = Number(safe.present_count || 0);
+    const total = Number(safe.total_students || 0);
+    box.textContent = `Отметилось: ${present} из ${total}`;
+  }
+
+  function applyQrPayload(qr) {
+    if (!qr) return;
+
+    const link = document.getElementById('effectiveCheckinUrl');
+    const linkBox = document.getElementById('qrLinkBox');
+    if (link) {
+      const href = String(qr.effective_checkin_url || '').trim();
+      link.href = href || '#';
+      link.textContent = href || '-';
+      if (linkBox) {
+        linkBox.classList.toggle('d-none', !href);
+      }
+    }
+
+    const img = document.getElementById('qrImage');
+    const empty = document.getElementById('qrEmpty');
+    const qrData = String(qr.qr_data_uri || '').trim();
+    if (img) {
+      if (qrData) {
+        img.src = qrData;
+        img.classList.remove('d-none');
+        if (empty) empty.classList.add('d-none');
+      } else {
+        img.src = '';
+        img.classList.add('d-none');
+        if (empty) {
+          empty.innerHTML = 'QR доступен только при статусе PUBLIC ACTIVE<span class="d-block">(Для включения статуса Public нажмите кнопку "Открыть")</span>';
+          empty.classList.remove('d-none');
+        }
+      }
+    }
+
+    const qrError = document.getElementById('qrError');
+    const errText = String(qr.qr_error || '').trim();
+    if (qrError) {
+      if (errText) {
+        qrError.textContent = errText;
+        qrError.classList.remove('d-none');
+      } else {
+        qrError.textContent = '';
+        qrError.classList.add('d-none');
+      }
+    }
+
+    renderCheckinSummary(qr.checkin_summary || {});
+    applyTunnelState(qr.tunnel || {});
+  }
+
+  function renderRefreshTimer() {
+    const el = document.getElementById('refreshTimer');
+    if (!el) return;
+    if (!tunnelNextRefresh || !tunnelRefreshInterval) {
+      el.textContent = '-';
+      return;
+    }
+    const sec = Math.ceil(tunnelNextRefresh - Date.now() / 1000);
+    if (sec <= 0) {
+      el.textContent = '00:00';
+      return;
+    }
+    const hh = Math.floor(sec / 3600);
+    const mm = Math.floor((sec % 3600) / 60);
+    const ss = sec % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    el.textContent = hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+  }
+
+  async function refreshQrState() {
+    if (!LESSON_ID || !LESSON_DATE) return;
+    try {
+      const response = await fetch(`/api/journal/lesson/${LESSON_ID}/qr?date=${encodeURIComponent(LESSON_DATE)}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) return;
+      applyQrPayload(data.qr || {});
+    } catch (_err) {
+    }
+  }
+
+  function connectTunnelStream() {
+    if (!window.EventSource) return false;
+    tunnelStream = new EventSource(
+      `/stream/journal/tunnel?lesson_id=${encodeURIComponent(String(LESSON_ID || 0))}&date=${encodeURIComponent(LESSON_DATE)}`
+    );
+    tunnelStream.addEventListener('state', async () => {
+      await refreshQrState();
+    });
+    tunnelStream.onerror = () => {
+      if (tunnelStream && tunnelStream.readyState === 2) {
+        tunnelStream.close();
+        tunnelStream = null;
+        if (!qrPollTimer) {
+          qrPollTimer = setInterval(refreshQrState, 7000);
+        }
+      }
+    };
+    return true;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    setInterval(renderRefreshTimer, 1000);
+    const hasSse = connectTunnelStream();
+    if (!hasSse) {
+      qrPollTimer = setInterval(refreshQrState, 7000);
+    }
+    await refreshQrState();
+    renderRefreshTimer();
+
+    window.addEventListener('beforeunload', () => {
+      if (tunnelStream) tunnelStream.close();
+      if (qrPollTimer) clearInterval(qrPollTimer);
+    });
+  });
+</script>
+</body>
+</html>

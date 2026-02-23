@@ -1,0 +1,105 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Отметка по QR</title>
+
+  <script>
+    (() => {
+      const saved = localStorage.getItem('rs-theme');
+      const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+  <style>
+    :root{
+      --rs-page-bg: #f8f9fa;
+      --rs-text: #333;
+      --rs-card-bg: #ffffff;
+      --rs-border: #eee;
+      --rs-shadow: rgba(0,0,0,0.04);
+    }
+    :root[data-bs-theme="dark"]{
+      --rs-page-bg: #0f1216;
+      --rs-text: #e9ecef;
+      --rs-card-bg: #151a21;
+      --rs-border: rgba(255,255,255,0.08);
+      --rs-shadow: rgba(0,0,0,0.35);
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(13, 110, 253, 0.12), transparent 38%),
+        radial-gradient(circle at 85% 85%, rgba(25, 135, 84, 0.10), transparent 45%),
+        var(--rs-page-bg);
+      color: var(--rs-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .checkin-card {
+      width: 100%;
+      max-width: 560px;
+      border: 1px solid var(--rs-border);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px var(--rs-shadow);
+      background: var(--rs-card-bg);
+    }
+  </style>
+</head>
+<body>
+  <div class="checkin-card p-4">
+    <h1 class="h4 fw-bold mb-3">Отметка посещаемости</h1>
+
+    {% if access_error %}
+      <div class="alert alert-danger py-2">{{ access_error }}</div>
+    {% endif %}
+
+    {% if lesson and course %}
+      <div class="small text-muted mb-1">Дисциплина</div>
+      <div class="fw-semibold mb-2">{{ course.title }}</div>
+
+      <div class="small text-muted mb-1">Группа и занятие</div>
+      <div class="mb-3">{{ group_names_display }} | {{ lesson_date_iso }} | {{ pair_info.label }} {% if pair_info.time %}({{ pair_info.time }}){% endif %}</div>
+    {% endif %}
+
+    {% if done_message %}
+      {% set done_class = 'alert-success' if done_type == 'success' else ('alert-info' if done_type == 'info' else 'alert-danger') %}
+      <div class="alert {{ done_class }} py-2">{{ done_message }}</div>
+    {% endif %}
+
+    {% if not access_error and lesson and students %}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <label class="form-label">Выберите себя из списка</label>
+        <select class="form-select form-select-lg" name="student_id" required>
+          <option value="" disabled {% if not selected_student_id %}selected{% endif %}>Выберите себя</option>
+          {% for student in students %}
+            <option value="{{ student.id }}" {% if selected_student_id == student.id %}selected{% endif %}>{{ student.fio }}{% if has_multiple_groups %} ({{ student.group_name }}){% endif %}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit" class="btn btn-primary btn-lg w-100 mt-3">
+          <i class="bi bi-check2-circle me-1"></i> Отметиться
+        </button>
+      </form>
+    {% elif not access_error and not students %}
+      <div class="alert alert-warning py-2">В группе нет студентов для отметки.</div>
+    {% endif %}
+
+    <div class="small text-muted mt-3">Если вы уже отметились, повторная отправка не требуется.</div>
+  </div>
+</body>
+</html>
