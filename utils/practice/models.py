@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import func
 
 
@@ -58,6 +59,7 @@ def init_practice_models(db):
         comment = db.Column(db.String(1000), nullable=False, default="")
         score_updated_at = db.Column(db.DateTime, nullable=True)
         comment_updated_at = db.Column(db.DateTime, nullable=True)
+        change_history = db.Column(db.String(2000), nullable=False, default="[]")
 
         updated_at = db.Column(db.DateTime, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 
@@ -66,6 +68,12 @@ def init_practice_models(db):
         )
 
         def to_dict(self):
+            parsed_history = []
+            if self.change_history:
+                try:
+                    parsed_history = json.loads(self.change_history)
+                except Exception:
+                    parsed_history = []
             return {
                 "id": self.id,
                 "practice_id": self.practice_id,
@@ -74,6 +82,7 @@ def init_practice_models(db):
                 "comment": self.comment,
                 "score_updated_at": self.score_updated_at,
                 "comment_updated_at": self.comment_updated_at,
+                "change_history": parsed_history,
                 "updated_at": self.updated_at,
             }
 

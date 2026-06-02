@@ -31,7 +31,6 @@ def register_course_routes(
         if group_ids:
             groups = Group.query.filter(Group.id.in_(group_ids)).order_by(Group.name).all()
 
-
             rows = (
                 db.session.query(Student.group_id, func.count(Student.id))
                 .filter(Student.group_id.in_(group_ids))
@@ -39,7 +38,6 @@ def register_course_routes(
                 .all()
             )
             student_counts = {gid: cnt for gid, cnt in rows}
-
 
             rows2 = (
                 db.session.query(
@@ -67,8 +65,7 @@ def register_course_routes(
             group_max_possible[gid] = sc * max_per_student
             group_max_works[gid] = sc * total_practices
 
-        return render_template(
-            "course.html",
+        return render_template("course/course.html",
             course=course,
             groups=groups,
             student_counts=student_counts,
@@ -107,8 +104,7 @@ def register_course_routes(
                 p.effective_start_date = ov.start_date if ov else p.start_date
                 p.effective_end_date = ov.end_date if ov else p.end_date
 
-        return render_template(
-            "course_group.html",
+        return render_template("course/course_group.html",
             course=course,
             group=group,
             practices=practices

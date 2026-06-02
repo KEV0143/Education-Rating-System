@@ -6,6 +6,7 @@
   <title>{{ course.title }} — {{ group.name }}</title>
 
   <script>
+
     (() => {
       const saved = localStorage.getItem('rs-theme');
       const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
@@ -45,7 +46,15 @@
       --rs-muted: rgba(255,255,255,0.65);
     }
 
-    body { background-color: var(--rs-page-bg); color: var(--rs-text); font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { 
+      background-color: var(--rs-page-bg); 
+      color: var(--rs-text); 
+      font-family: 'Segoe UI', system-ui, sans-serif; 
+      transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .panel-card, .modal-content, .btn, .form-control, .list-group-item, .practice-chip, .student-scroll-area {
+      transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
     .panel-card { border-radius: 12px; box-shadow: 0 2px 5px var(--rs-shadow); border: 1px solid var(--rs-border); background: var(--rs-card-bg); }
     .students-panel-card { min-height: 0; }
     .student-scroll-area { height: 840px; overflow-y: auto; border: 1px solid var(--rs-soft-border); border-radius: 10px; background: var(--rs-card-bg); }
@@ -185,19 +194,22 @@
      data-course-id="{{ course.id }}"
      data-group-id="{{ group.id }}">
 
-  <div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
+  <div class="row align-items-center mb-4 g-3">
+    <div class="col-md">
       <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm mb-2">
         <i class="bi bi-arrow-left"></i> Назад к курсу
       </a>
       <h2 class="m-0 fw-bold">{{ group.name }}</h2>
       <div class="text-muted small mt-1">
         <span class="fw-semibold">{{ course.title }}</span> · {{ course.year }} · {{ course.semester }} семестр
+        {% if course.is_coursework %}
+          · <span class="badge" style="background-color: rgba(16, 185, 129, 0.12) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.25) !important; border-radius: 6px; font-weight: 600; padding: 2.5px 6px; font-size: 0.72rem; letter-spacing: 0.2px; vertical-align: middle; line-height: 1;">Курсовая работа</span>
+        {% endif %}
       </div>
     </div>
 
-    <div class="ms-3">
-      <div class="d-flex gap-2 flex-wrap justify-content-end">
+    <div class="col-md-auto">
+      <div class="d-flex gap-2 flex-wrap justify-content-start justify-content-md-end">
         {{ settings_button() }}
         <a class="btn btn-outline-primary"
            href="{{ url_for('course_assessments', course_id=course.id) }}">
@@ -276,7 +288,48 @@
       <div class="panel-card p-3 students-panel-card">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <div class="fw-bold">Студенты</div>
-          <div class="save-indicator" id="globalSaveIndicator">—</div>
+          <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-sm btn-outline-primary me-1" type="button" data-bs-toggle="collapse" data-bs-target="#groupAnalyticsCollapse" id="btnGroupAnalytics" style="display: none; border-radius: 6px;">
+              <i class="bi bi-pie-chart-fill"></i> Аналитика
+            </button>
+            <div class="save-indicator" id="globalSaveIndicator">—</div>
+          </div>
+        </div>
+
+        <!-- Разворачивающийся блок аналитики -->
+        <div class="collapse mb-3" id="groupAnalyticsCollapse">
+          <div class="rounded-3 animate-fade-in" style="background: rgba(13,110,253,0.02); border: 1px solid var(--rs-soft-border); border-radius: 14px; padding: 16px !important;">
+            <div class="row align-items-center g-3">
+              <div class="col-md-5 border-md-end pb-3 pb-md-0" style="border-color: var(--rs-soft-border) !important;">
+                <div class="d-flex align-items-center justify-content-center gap-4">
+                  <div class="text-center">
+                    <div class="fw-bold mb-3 text-body" style="font-size: 0.9rem;">Распределение оценок</div>
+                    <div style="height: 120px; width: 120px; position: relative; margin: 0 auto;">
+                      <canvas id="groupGradesChart"></canvas>
+                    </div>
+                  </div>
+                  <div id="groupGradesLegend" class="d-flex flex-column gap-2 small text-muted align-items-start" style="font-size: 0.76rem; min-width: 110px;">
+                    <!-- Легенда заполняется через JS -->
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-7 ps-md-4">
+                <div class="fw-bold mb-3 text-body" style="font-size: 0.9rem;"><i class="bi bi-info-circle-fill me-1 text-primary"></i>Сводка успеваемости</div>
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom" style="border-color: var(--rs-border) !important;">
+                  <span class="text-muted small">Успешно аттестовано (балл > 0):</span>
+                  <span class="fw-bold text-success" id="analPassedCount" style="font-size: 0.95rem;">0</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom" style="border-color: var(--rs-border) !important;">
+                  <span class="text-muted small">Не предоставлено работ (нет оценки):</span>
+                  <span class="fw-bold text-danger" id="analFailedCount" style="font-size: 0.95rem;">0</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="text-muted small">Средний балл по группе:</span>
+                  <span class="fw-bold text-primary" id="analAvgScore" style="font-size: 0.95rem;">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <input class="form-control mb-2" id="studentSearch" placeholder="Поиск по ФИО..." oninput="filterStudents()">
@@ -382,10 +435,13 @@
   </div>
 </div>
 {% endif %}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
+</script>
 
 {% if update_available and update_url %}
 <script>
+
   document.addEventListener('DOMContentLoaded', () => {
     const modalEl = document.getElementById('updateModal');
     const updateModal = modalEl ? new bootstrap.Modal(modalEl) : null;
@@ -451,6 +507,7 @@
 </script>
 {% endif %}
 <script>
+
   const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
   const pageEl = document.getElementById('page');
   const COURSE_ID = Number(pageEl.dataset.courseId);
@@ -465,6 +522,145 @@
 
   const saveTimers = new Map();
   const lastPayload = new Map();
+
+  let groupGradesChart = null;
+
+  function recalculateGroupAnalyticsFromUI() {
+    const btn = document.getElementById('btnGroupAnalytics');
+    const rows = document.querySelectorAll('.student-row');
+    if (btn) btn.style.display = rows && rows.length ? 'inline-block' : 'none';
+
+    if (!rows || !rows.length) return;
+
+    let passed = 0;
+    let failed = 0;
+    let scoreSum = 0;
+    let scoreCount = 0;
+
+    let excellent = 0;
+    let good = 0;
+    let satisfactory = 0;
+    let poor = 0;
+
+    const maxVal = activePracticeMax || 10;
+
+    rows.forEach(row => {
+      const scoreInput = row.querySelector('.score-input');
+      const scoreVal = scoreInput && scoreInput.value ? Number(scoreInput.value) : null;
+
+      if (scoreVal !== null && scoreVal > 0) {
+        passed++;
+        scoreSum += scoreVal;
+        scoreCount++;
+
+        const pct = scoreVal / maxVal;
+        if (pct >= 0.8) excellent++;
+        else if (pct >= 0.6) good++;
+        else if (pct >= 0.4) satisfactory++;
+        else poor++;
+      } else {
+        failed++;
+      }
+    });
+
+    const avg = scoreCount ? (scoreSum / scoreCount).toFixed(2) : '—';
+
+    document.getElementById('analPassedCount').textContent = passed;
+    document.getElementById('analFailedCount').textContent = failed;
+    document.getElementById('analAvgScore').textContent = avg;
+
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const textColor = isDark ? '#e9ecef' : '#333';
+
+    if (groupGradesChart) groupGradesChart.destroy();
+
+    const chartData = [excellent, good, satisfactory, poor, failed];
+    const chartLabels = ['Отлично', 'Хорошо', 'Удовл.', 'Неуд.', 'Не сдано'];
+    const chartColors = ['#198754', '#0d6efd', '#fd7e14', '#dc3545', '#94a3b8'];
+
+    const finalLabels = [];
+    const finalData = [];
+    const finalColors = [];
+
+    for (let i = 0; i < chartData.length; i++) {
+      if (chartData[i] > 0) {
+        finalLabels.push(chartLabels[i]);
+        finalData.push(chartData[i]);
+        finalColors.push(chartColors[i]);
+      }
+    }
+
+    if (finalData.length === 0) {
+      finalLabels.push('Нет оценок');
+      finalData.push(1);
+      finalColors.push(isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)');
+    }
+
+    // Рендерим кастомную HTML-легенду
+    const legendContainer = document.getElementById('groupGradesLegend');
+    if (legendContainer) {
+      legendContainer.innerHTML = '';
+      finalLabels.forEach((label, idx) => {
+        const item = document.createElement('div');
+        item.className = 'd-flex align-items-center gap-2';
+        item.style.lineHeight = '1.2';
+        
+        const dot = document.createElement('span');
+        dot.style.display = 'inline-block';
+        dot.style.width = '8px';
+        dot.style.height = '8px';
+        dot.style.borderRadius = '50%';
+        dot.style.flexShrink = '0';
+        dot.style.backgroundColor = finalColors[idx];
+        
+        const text = document.createElement('span');
+        text.style.fontWeight = '500';
+        if (label === 'Нет оценок') {
+          text.textContent = label;
+        } else {
+          text.textContent = `${label}: ${finalData[idx]}`;
+        }
+        
+        item.appendChild(dot);
+        item.appendChild(text);
+        legendContainer.appendChild(item);
+      });
+    }
+
+    const ctx = document.getElementById('groupGradesChart').getContext('2d');
+    groupGradesChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: finalLabels,
+        datasets: [{
+          data: finalData,
+          backgroundColor: finalColors,
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            cornerRadius: 8,
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const val = context.raw || 0;
+                if (label === 'Нет оценок') return label;
+                return `${label}: ${val}`;
+              }
+            }
+          }
+        },
+        cutout: '72%'
+      }
+    });
+  }
 
   function formatTs(iso) {
     if (!iso) return '';
@@ -535,7 +731,43 @@
     });
   }
 
-  function setTooltip(el, titleText) {
+  function buildScoreTooltipHtml(updatedAt, history) {
+    if (!updatedAt) return '';
+    let html = '<div class="text-start">';
+    html += `<div><strong>Оценка изменена:</strong> ${formatTs(updatedAt)}</div>`;
+    if (history && history.length > 0) {
+      html += '<hr class="my-1" style="border-color: rgba(255,255,255,0.15);">';
+      html += '<div style="font-size: 0.78rem; opacity: 0.85; margin-bottom: 2px;">История оценок:</div>';
+      html += '<ul class="list-unstyled mb-0" style="font-size: 0.75rem; line-height: 1.35; padding-left: 0;">';
+      history.forEach(item => {
+        const val = (item.value !== null && item.value !== undefined) ? item.value : '—';
+        html += `<li>• <strong>${val}</strong> <span class="opacity-75" style="font-size: 0.7rem;">(${formatTs(item.timestamp)})</span></li>`;
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function buildCommentTooltipHtml(updatedAt, history) {
+    if (!updatedAt) return '';
+    let html = '<div class="text-start">';
+    html += `<div><strong>Комментарий изменён:</strong> ${formatTs(updatedAt)}</div>`;
+    if (history && history.length > 0) {
+      html += '<hr class="my-1" style="border-color: rgba(255,255,255,0.15);">';
+      html += '<div style="font-size: 0.78rem; opacity: 0.85; margin-bottom: 2px;">История комментариев:</div>';
+      html += '<ul class="list-unstyled mb-0" style="font-size: 0.75rem; line-height: 1.35; padding-left: 0;">';
+      history.forEach(item => {
+        const val = item.value ? item.value : '—';
+        html += `<li>• <em>${val}</em> <span class="opacity-75" style="font-size: 0.7rem;">(${formatTs(item.timestamp)})</span></li>`;
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function setTooltip(el, titleText, isHtml = false) {
     if (!el) return;
     const inst = bootstrap.Tooltip.getInstance(el);
     if (inst) inst.dispose();
@@ -543,10 +775,16 @@
     if (titleText) {
       el.setAttribute('data-bs-toggle', 'tooltip');
       el.setAttribute('data-bs-placement', 'top');
+      if (isHtml) {
+        el.setAttribute('data-bs-html', 'true');
+      } else {
+        el.removeAttribute('data-bs-html');
+      }
       el.setAttribute('title', titleText);
     } else {
       el.removeAttribute('data-bs-toggle');
       el.removeAttribute('data-bs-placement');
+      el.removeAttribute('data-bs-html');
       el.removeAttribute('title');
     }
   }
@@ -558,8 +796,11 @@
     const scoreInput = row.querySelector('input.score-input');
     const commentInput = row.querySelector('input.comment-input');
 
-    setTooltip(scoreInput, data.score_updated_at ? `Оценка изменена: ${formatTs(data.score_updated_at)}` : '');
-    setTooltip(commentInput, data.comment_updated_at ? `Комментарий изменён: ${formatTs(data.comment_updated_at)}` : '');
+    const scoreHistory = (data.change_history && data.change_history.score_history) || [];
+    const commentHistory = (data.change_history && data.change_history.comment_history) || [];
+
+    setTooltip(scoreInput, data.score_updated_at ? buildScoreTooltipHtml(data.score_updated_at, scoreHistory) : '', true);
+    setTooltip(commentInput, data.comment_updated_at ? buildCommentTooltipHtml(data.comment_updated_at, commentHistory) : '', true);
 
     refreshRowFilledState(studentId);
     reinitTooltips(row);
@@ -664,10 +905,10 @@
           score.placeholder = 'Балл';
           score.value = (r.score === null || r.score === undefined) ? '' : r.score;
 
+          const scoreHistory = (r.change_history && r.change_history.score_history) || [];
+          const commentHistory = (r.change_history && r.change_history.comment_history) || [];
           if (r.score_updated_at) {
-            score.setAttribute('data-bs-toggle', 'tooltip');
-            score.setAttribute('data-bs-placement', 'top');
-            score.title = `Оценка изменена: ${formatTs(r.score_updated_at)}`;
+            setTooltip(score, buildScoreTooltipHtml(r.score_updated_at, scoreHistory), true);
           }
 
           const comment = document.createElement('input');
@@ -678,9 +919,7 @@
           comment.value = r.comment || '';
 
           if (r.comment_updated_at) {
-            comment.setAttribute('data-bs-toggle', 'tooltip');
-            comment.setAttribute('data-bs-placement', 'top');
-            comment.title = `Комментарий изменён: ${formatTs(r.comment_updated_at)}`;
+            setTooltip(comment, buildCommentTooltipHtml(r.comment_updated_at, commentHistory), true);
           }
 
           setFilledState(score);
@@ -689,6 +928,7 @@
           score.addEventListener('input', () => {
             setFilledState(score);
             queueAutoSave(r.student_id, score.value, comment.value);
+            recalculateGroupAnalyticsFromUI();
           });
           comment.addEventListener('input', () => {
             setFilledState(comment);
@@ -719,6 +959,7 @@
 
         document.getElementById('studentSearch').value = '';
         setGlobalIndicator(null, getPracticeIndicatorText());
+        recalculateGroupAnalyticsFromUI();
       })
       .catch(() => area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка сети</div>');
   }
@@ -948,19 +1189,41 @@
         const lastComment = d.last_comment_updated_at ? formatTs(d.last_comment_updated_at) : '—';
 
         body.innerHTML = `
-          <div class="d-flex align-items-start gap-3">
-            <div class="donut" style="--p: ${p};" title="Сдано: ${done}. Не сдано: ${missing}">
-              <div class="donut-text">${p}%</div>
-            </div>
-            <div class="flex-grow-1">
-              <div class="mb-2"><span class="fw-semibold">Выполнено практик:</span> ${done} / ${total}</div>
-              <div class="mb-2"><span class="fw-semibold">Не выполнено:</span> ${missing}</div>
-              <div class="mb-2"><span class="fw-semibold">Баллы:</span> ${d.total_score} / ${d.max_possible}</div>
-              <div class="mt-3 small-muted">
-                <div><i class="bi bi-clock-history me-1"></i>Оценка изменена: <span class="fw-semibold">${lastScore}</span></div>
-                <div><i class="bi bi-chat-left-text me-1"></i>Комментарий изменён: <span class="fw-semibold">${lastComment}</span></div>
+          <div class="row g-3">
+            <div class="col-md-4 d-flex flex-column align-items-center justify-content-center border-end border-light pe-3">
+              <div class="donut mb-2" style="--p: ${p}; width: 90px; height: 90px;">
+                <div class="donut-text" style="font-size: 1.1rem; font-weight: 800;">${p}%</div>
               </div>
-              <div class="text-muted small mt-2">* “Выполнено” считается, если балл выставлен.</div>
+              <div class="small-muted text-center fw-semibold">Текущая успеваемость</div>
+            </div>
+            <div class="col-md-8 ps-3">
+              <div class="mb-3">
+                <h6 class="text-uppercase tracking-wider small text-muted mb-2" style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;">Сведения о выполнении работ</h6>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">Успешно завершено:</span>
+                  <span class="badge bg-success-subtle text-success fw-bold">${done} из ${total}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">Не выполнено:</span>
+                  <span class="badge bg-danger-subtle text-danger fw-bold">${missing}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="text-muted small">Сумма набранных баллов:</span>
+                  <span class="badge bg-primary-subtle text-primary fw-bold">${d.total_score} / ${d.max_possible}</span>
+                </div>
+              </div>
+              <div class="mb-3 pt-2 border-top">
+                <h6 class="text-uppercase tracking-wider small text-muted mb-2" style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;">История активности</h6>
+                <div class="small text-muted mb-1">
+                  <i class="bi bi-calendar2-check me-2 text-primary"></i>Последняя корректировка оценки: <span class="fw-semibold text-body">${lastScore}</span>
+                </div>
+                <div class="small text-muted">
+                  <i class="bi bi-chat-left-dots me-2 text-primary"></i>Последнее изменение комментария: <span class="fw-semibold text-body">${lastComment}</span>
+                </div>
+              </div>
+              <div class="pt-2 border-top text-muted" style="font-size: 0.72rem; line-height: 1.35;">
+                <strong>Примечание:</strong> Задание признается выполненным при наличии фактически выставленной оценки.
+              </div>
             </div>
           </div>
         `;
@@ -974,6 +1237,16 @@
     const firstChip = document.querySelector('#practiceChips .practice-chip');
     if (firstChip) {
       selectPractice(firstChip);
+    }
+
+    const collapseEl = document.getElementById('groupAnalyticsCollapse');
+    if (collapseEl) {
+      collapseEl.addEventListener('shown.bs.collapse', () => {
+        if (groupGradesChart) {
+          groupGradesChart.resize();
+          groupGradesChart.update();
+        }
+      });
     }
   });
 </script>

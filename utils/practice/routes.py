@@ -1,5 +1,5 @@
-from datetime import date, datetime
-
+import json
+from datetime import date, datetime, timezone
 from flask import render_template, request, jsonify, abort
 
 
@@ -65,6 +65,45 @@ def register_practice_routes(
         except Exception:
             return None
 
+    def _update_grade_history(grade, score, comment, now):
+        history = {"score_history": [], "comment_history": []}
+        if grade.change_history:
+            try:
+                parsed = json.loads(grade.change_history)
+                if isinstance(parsed, dict):
+                    history["score_history"] = parsed.get("score_history", [])
+                    history["comment_history"] = parsed.get("comment_history", [])
+            except Exception:
+                pass
+
+        score_changed = True
+        if history["score_history"]:
+            last_score = history["score_history"][0]
+            if last_score.get("value") == score:
+                score_changed = False
+
+        if score_changed:
+            history["score_history"].insert(0, {
+                "value": score,
+                "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            })
+            history["score_history"] = history["score_history"][:5]
+
+        comment_changed = True
+        if history["comment_history"]:
+            last_comment = history["comment_history"][0]
+            if last_comment.get("value") == comment:
+                comment_changed = False
+
+        if comment_changed:
+            history["comment_history"].insert(0, {
+                "value": comment,
+                "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            })
+            history["comment_history"] = history["comment_history"][:5]
+
+        grade.change_history = json.dumps(history)
+
     def _parse_optional_interval(start_raw, end_raw):
         start_s = str(start_raw or "").strip()
         end_s = str(end_raw or "").strip()
@@ -86,19 +125,23 @@ def register_practice_routes(
         return start_d, end_d
 
     def _effective_interval(practice, group_id: int):
-        override = PracticeGroupInterval.query.filter_by(
-            practice_id=practice.id,
-            group_id=group_id,
-        ).first()
+        override = db.session.execute(
+            db.select(PracticeGroupInterval).filter_by(
+                practice_id=practice.id,
+                group_id=group_id,
+            )
+        ).scalars().first()
         if override:
             return override.start_date, override.end_date, True
         return practice.start_date, practice.end_date, False
 
     def _save_group_interval(practice, group_id: int, start_d, end_d):
-        override = PracticeGroupInterval.query.filter_by(
-            practice_id=practice.id,
-            group_id=group_id,
-        ).first()
+        override = db.session.execute(
+            db.select(PracticeGroupInterval).filter_by(
+                practice_id=practice.id,
+                group_id=group_id,
+            )
+        ).scalars().first()
 
         if practice.start_date == start_d and practice.end_date == end_d:
             if override:
@@ -120,12 +163,15 @@ def register_practice_routes(
         group_ids = parse_group_ids(course.group_ids)
         groups = []
         if group_ids:
-            groups = Group.query.filter(Group.id.in_(group_ids)).order_by(Group.name).all()
+            groups = db.session.execute(
+                db.select(Group).filter(Group.id.in_(group_ids)).order_by(Group.name)
+            ).scalars().all()
 
-        practices = Practice.query.filter_by(course_id=course.id).order_by(Practice.id.asc()).all()
+        practices = db.session.execute(
+            db.select(Practice).filter_by(course_id=course.id).order_by(Practice.id.asc())
+        ).scalars().all()
 
-        return render_template(
-            "course_assessments.html",
+        return render_template("practice/course_assessments.html",
             course=course,
             groups=groups,
             practices=practices,
@@ -199,7 +245,9 @@ def register_practice_routes(
         p.start_date = start_date
         p.end_date = end_date
 
-        overrides = PracticeGroupInterval.query.filter_by(practice_id=p.id).all()
+        overrides = db.session.execute(
+            db.select(PracticeGroupInterval).filter_by(practice_id=p.id)
+        ).scalars().all()
         for ov in overrides:
             if ov.start_date == start_date and ov.end_date == end_date:
                 db.session.delete(ov)
@@ -233,21 +281,31 @@ def register_practice_routes(
             "has_group_interval_override": has_override,
         }
 
-        students = Student.query.filter_by(group_id=group_id).order_by(Student.fio).all()
+        students = db.session.execute(
+            db.select(Student).filter_by(group_id=group_id).order_by(Student.fio)
+        ).scalars().all()
         if not students:
             return jsonify({"success": True, "rows": [], "practice": practice_payload})
 
         student_ids = [s.id for s in students]
 
-        grades = PracticeGrade.query.filter(
-            PracticeGrade.practice_id == practice.id,
-            PracticeGrade.student_id.in_(student_ids)
-        ).all()
+        grades = db.session.execute(
+            db.select(PracticeGrade).filter(
+                PracticeGrade.practice_id == practice.id,
+                PracticeGrade.student_id.in_(student_ids)
+            )
+        ).scalars().all()
         gmap = {g.student_id: g for g in grades}
 
         rows = []
         for s in students:
             g = gmap.get(s.id)
+            parsed_history = []
+            if g and g.change_history:
+                try:
+                    parsed_history = json.loads(g.change_history)
+                except Exception:
+                    parsed_history = []
             rows.append({
                 "student_id": s.id,
                 "fio": s.fio,
@@ -255,6 +313,7 @@ def register_practice_routes(
                 "comment": g.comment if g else "",
                 "score_updated_at": _dt_iso(getattr(g, "score_updated_at", None)) if g else None,
                 "comment_updated_at": _dt_iso(getattr(g, "comment_updated_at", None)) if g else None,
+                "change_history": parsed_history,
                 "updated_at": _dt_iso(getattr(g, "updated_at", None)) if g else None,
             })
 
@@ -309,12 +368,14 @@ def register_practice_routes(
         score = _validate_score(data.get("score"), practice.min_score, practice.max_score)
         comment = _sanitize_comment(data.get("comment", ""))
 
-        grade = PracticeGrade.query.filter_by(practice_id=practice.id, student_id=student.id).first()
+        grade = db.session.execute(
+            db.select(PracticeGrade).filter_by(practice_id=practice.id, student_id=student.id)
+        ).scalars().first()
         if not grade:
             grade = PracticeGrade(practice_id=practice.id, student_id=student.id)
             db.session.add(grade)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         old_score = grade.score
         old_comment = grade.comment or ""
@@ -331,12 +392,23 @@ def register_practice_routes(
         if comment_changed:
             grade.comment_updated_at = now
 
+        if score_changed or comment_changed:
+            _update_grade_history(grade, score, new_comment, now)
+
         db.session.commit()
+
+        parsed_history = []
+        if grade.change_history:
+            try:
+                parsed_history = json.loads(grade.change_history)
+            except Exception:
+                parsed_history = []
 
         return jsonify({
             "success": True,
             "score_updated_at": _dt_iso(getattr(grade, "score_updated_at", None)),
             "comment_updated_at": _dt_iso(getattr(grade, "comment_updated_at", None)),
+            "change_history": parsed_history,
             "updated_at": _dt_iso(getattr(grade, "updated_at", None)),
         })
 
@@ -356,19 +428,23 @@ def register_practice_routes(
         score = _validate_score(data.get("score"), practice.min_score, practice.max_score)
         comment = _sanitize_comment(data.get("comment", ""))
 
-        students = Student.query.filter_by(group_id=group_id).all()
+        students = db.session.execute(
+            db.select(Student).filter_by(group_id=group_id)
+        ).scalars().all()
         if not students:
             return jsonify({"success": True, "updated": 0})
 
         student_ids = [s.id for s in students]
-        existing = PracticeGrade.query.filter(
-            PracticeGrade.practice_id == practice.id,
-            PracticeGrade.student_id.in_(student_ids)
-        ).all()
+        existing = db.session.execute(
+            db.select(PracticeGrade).filter(
+                PracticeGrade.practice_id == practice.id,
+                PracticeGrade.student_id.in_(student_ids)
+            )
+        ).scalars().all()
         gmap = {g.student_id: g for g in existing}
 
         updated = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for sid in student_ids:
             g = gmap.get(sid)
             if not g:
@@ -381,10 +457,16 @@ def register_practice_routes(
             g.score = score
             g.comment = comment
 
-            if old_score != score:
+            score_changed = (old_score != score)
+            comment_changed = (old_comment != (comment or ""))
+
+            if score_changed:
                 g.score_updated_at = now
-            if old_comment != (comment or ""):
+            if comment_changed:
                 g.comment_updated_at = now
+
+            if score_changed or comment_changed:
+                _update_grade_history(g, score, comment or "", now)
 
             updated += 1
 
@@ -404,7 +486,9 @@ def register_practice_routes(
         score = _validate_score(data.get("score"), practice.min_score, practice.max_score)
         comment = _sanitize_comment(data.get("comment", ""))
 
-        students = Student.query.filter(Student.id.in_([int(x) for x in student_ids])).all()
+        students = db.session.execute(
+            db.select(Student).filter(Student.id.in_([int(x) for x in student_ids]))
+        ).scalars().all()
         if not students:
             return jsonify({"success": True, "updated": 0})
 
@@ -414,14 +498,16 @@ def register_practice_routes(
         if not ok_ids:
             return jsonify({"success": True, "updated": 0})
 
-        existing = PracticeGrade.query.filter(
-            PracticeGrade.practice_id == practice.id,
-            PracticeGrade.student_id.in_(ok_ids)
-        ).all()
+        existing = db.session.execute(
+            db.select(PracticeGrade).filter(
+                PracticeGrade.practice_id == practice.id,
+                PracticeGrade.student_id.in_(ok_ids)
+            )
+        ).scalars().all()
         gmap = {g.student_id: g for g in existing}
 
         updated = 0
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for sid in ok_ids:
             g = gmap.get(sid)
             if not g:
@@ -434,10 +520,16 @@ def register_practice_routes(
             g.score = score
             g.comment = comment
 
-            if old_score != score:
+            score_changed = (old_score != score)
+            comment_changed = (old_comment != (comment or ""))
+
+            if score_changed:
                 g.score_updated_at = now
-            if old_comment != (comment or ""):
+            if comment_changed:
                 g.comment_updated_at = now
+
+            if score_changed or comment_changed:
+                _update_grade_history(g, score, comment or "", now)
 
             updated += 1
 
@@ -456,7 +548,9 @@ def register_practice_routes(
         if student.group_id not in allowed_gids:
             return jsonify({"success": False, "error": "Student is not in this course"}), 403
 
-        practices = Practice.query.filter_by(course_id=course.id).all()
+        practices = db.session.execute(
+            db.select(Practice).filter_by(course_id=course.id)
+        ).scalars().all()
         total_practices = len(practices)
         max_possible = float(sum(float(p.max_score) for p in practices)) if practices else 0.0
 
@@ -470,10 +564,12 @@ def register_practice_routes(
             })
 
         practice_ids = [p.id for p in practices]
-        grades = PracticeGrade.query.filter(
-            PracticeGrade.practice_id.in_(practice_ids),
-            PracticeGrade.student_id == student.id
-        ).all()
+        grades = db.session.execute(
+            db.select(PracticeGrade).filter(
+                PracticeGrade.practice_id.in_(practice_ids),
+                PracticeGrade.student_id == student.id
+            )
+        ).scalars().all()
 
         grade_map = {g.practice_id: g for g in grades}
 
@@ -505,8 +601,7 @@ def register_practice_routes(
             "completed_practices": completed,
             "missing_practices": max(0, total_practices - completed),
             "total_score": nice(total_score),
-            "max_possible": nice(max_possible)
-            ,
+            "max_possible": nice(max_possible),
             "last_score_updated_at": _dt_iso(last_score_update),
             "last_comment_updated_at": _dt_iso(last_comment_update),
         })

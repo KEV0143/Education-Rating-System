@@ -1,0 +1,2334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="greeting-name" content="{{ greeting_name|default('', true)|e }}">
+    <title>Рейтинговая система</title>
+
+    <script>
+
+      (() => {
+        const saved = localStorage.getItem('rs-theme');
+        const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+    </script>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <link rel="icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='iconkev.ico') }}" type="image/x-icon">
+
+    <style>
+        :root{
+            --rs-page-bg: #f8f9fa;
+            --rs-text: #1e293b;
+            --rs-card-bg: #ffffff;
+            --rs-border: #eee;
+            --rs-soft-border: #dee2e6;
+            --rs-img-bg: #f1f3f5;
+            --rs-shadow: rgba(0,0,0,0.03);
+            --rs-shadow-hover: rgba(0,0,0,0.08);
+            --rs-hover-bg: #f1f3f5;
+            --rs-muted: #64748b;
+        }
+        :root[data-bs-theme="dark"]{
+            --rs-page-bg: #0f1216;
+            --rs-text: #f1f5f9;
+            --rs-card-bg: #151a21;
+            --rs-border: rgba(255,255,255,0.08);
+            --rs-soft-border: rgba(255,255,255,0.14);
+            --rs-img-bg: #0e1116;
+            --rs-shadow: rgba(0,0,0,0.35);
+            --rs-shadow-hover: rgba(0,0,0,0.55);
+            --rs-hover-bg: rgba(255,255,255,0.06);
+            --rs-muted: #94a3b8;
+        }
+
+        body { 
+            background-color: var(--rs-page-bg); 
+            color: var(--rs-text); 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card, .modal-content, .btn, .form-control, .list-group-item, .card-course {
+            transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-course {
+            display: flex;
+            background: var(--rs-card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 5px var(--rs-shadow);
+            transition: 0.3s;
+            margin-bottom: 20px;
+            align-items: stretch;
+            border: 1px solid var(--rs-border);
+            height: 160px;
+            overflow: visible;
+            position: relative;
+        }
+        .card-course:hover { box-shadow: 0 8px 20px var(--rs-shadow-hover); transform: translateY(-2px); z-index: 10; }
+        .card-course:has(.dropdown-menu.show) { z-index: 25 !important; }
+        .course-img-container {
+            width: 240px;
+            min-width: 240px;
+            background-color: var(--rs-img-bg);
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+        .course-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .course-body { flex-grow: 1; padding: 15px 20px; display: flex; flex-direction: column; justify-content: center; position: relative; }
+        .dropdown-menu { z-index: 9999; box-shadow: 0 5px 15px rgba(0,0,0,0.15); }
+
+        .reason-badge {
+            background-color: #eef2ff; color: #4f46e5;
+            font-size: 0.75rem; padding: 3px 8px; border-radius: 6px;
+            margin-bottom: 6px; display: inline-block; border: 1px solid #e0e7ff;
+            font-weight: 600; white-space: nowrap;
+        }
+        .group-badge {
+            font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;
+            background: #0d6efd; color: white; text-decoration: none;
+            display: inline-block; margin-right: 5px;
+        }
+
+        .filter-btn {
+            background-color: var(--rs-card-bg); border: 1px solid var(--rs-soft-border); color: var(--rs-text);
+            text-align: left; display: flex; justify-content: space-between; align-items: center;
+        }
+        .filter-btn:hover, .filter-btn:focus, .filter-btn:active {
+            background-color: var(--rs-card-bg); border-color: #86b7fe; color: var(--rs-text);
+            box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25);
+        }
+        .dropdown-menu-scroll { max-height: 250px; overflow-y: auto; }
+        .filter-search-input { margin: 5px 10px; width: auto; }
+
+        .group-list-item { cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: 0.2s; border-bottom: 1px solid rgba(0,0,0,0.04);}
+        :root[data-bs-theme="dark"] .group-list-item { border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .group-list-item:hover { background-color: var(--rs-hover-bg); }
+        .group-list-item.active { background-color: #0d6efd; color: white; }
+
+        .group-del-btn{
+            opacity: 0;
+            padding: 0;
+            line-height: 1;
+            transition: opacity .15s;
+        }
+        .group-list-item:hover .group-del-btn,
+        .group-list-item.active .group-del-btn{
+            opacity: 1;
+        }
+        .student-scroll-area { height: 400px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--rs-soft-border); border-radius: 8px; background: var(--rs-card-bg); }
+        .checkbox-list-container { max-height: 200px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--rs-soft-border); border-radius: 8px; padding: 10px; }
+
+        :root[data-bs-theme="dark"] .reason-badge{
+            background-color: rgba(99,102,241,0.18);
+            border-color: rgba(99,102,241,0.35);
+            color: #c7d2fe;
+        }
+
+        :root[data-bs-theme="dark"] .bg-light{ background-color: var(--rs-card-bg) !important; }
+        :root[data-bs-theme="dark"] .bg-white{ background-color: var(--rs-card-bg) !important; }
+        :root[data-bs-theme="dark"] .text-dark{ color: var(--rs-text) !important; }
+
+        /* Premium Modal & UI Elements Styling */
+        .modal-content {
+            border-radius: 16px !important;
+            border: 1px solid var(--rs-border) !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
+            overflow: hidden;
+        }
+        .modal-header {
+            background-color: var(--rs-card-bg);
+            border-bottom: 1px solid var(--rs-border) !important;
+            padding: 16px 24px !important;
+        }
+        .modal-title {
+            font-weight: 700 !important;
+            font-size: 1.15rem !important;
+        }
+        .modal-body {
+            background-color: var(--rs-card-bg);
+        }
+        .modal-footer {
+            border-top: 1px solid var(--rs-border) !important;
+            background-color: var(--rs-page-bg);
+            padding: 14px 24px !important;
+        }
+
+        /* Group List item premium styling */
+        .group-list-item {
+            cursor: pointer;
+            padding: 10px 14px;
+            border-radius: 8px !important;
+            transition: all 0.2s ease-in-out;
+            border-bottom: none !important;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+        }
+        .group-list-item:hover {
+            background-color: var(--rs-hover-bg) !important;
+            transform: translateX(3px);
+        }
+        .group-list-item.active {
+            background: linear-gradient(135deg, #0d6efd, #0b5ed7) !important;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(13,110,253,0.18);
+            transform: translateX(3px);
+        }
+        .group-list-item.active .group-name {
+            font-weight: 600;
+        }
+        .group-list-item.active .group-del-btn {
+            color: rgba(255,255,255,0.8) !important;
+        }
+        .group-list-item.active .group-del-btn:hover {
+            color: white !important;
+        }
+
+        .uppercase-tracking {
+            font-size: 0.75rem !important;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            font-weight: 700 !important;
+            color: #6c757d !important;
+        }
+        :root[data-bs-theme="dark"] .uppercase-tracking {
+            color: rgba(255,255,255,0.65) !important;
+        }
+
+        /* Custom thin scrollbars for premium feel */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.12);
+            border-radius: 4px;
+        }
+        :root[data-bs-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+        :root[data-bs-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Premium Actions Context Dropdown Menu */
+        .premium-dropdown {
+            border: 1px solid var(--rs-soft-border) !important;
+            background: var(--rs-card-bg) !important;
+            border-radius: 14px !important;
+            padding: 6px !important;
+            box-shadow: 0 10px 30px var(--rs-shadow) !important;
+            min-width: 190px !important;
+            overflow: hidden !important;
+            border-color: var(--rs-border) !important;
+            backdrop-filter: blur(12px) !important;
+            transition: opacity 0.15s ease, transform 0.15s ease !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-dropdown {
+            background: rgba(21, 26, 33, 0.85) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        /* Entrance animation */
+        .premium-dropdown.show {
+            animation: premiumDropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes premiumDropdownFade {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(0.96);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .premium-dropdown .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px !important;
+            font-size: 0.88rem !important;
+            font-weight: 500 !important;
+            color: var(--rs-text) !important;
+            border-radius: 8px !important;
+            background: transparent !important;
+            border: 0 !important;
+            width: 100% !important;
+            text-align: left !important;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            margin-bottom: 2px !important;
+        }
+
+        .premium-dropdown .dropdown-item:last-child {
+            margin-bottom: 0 !important;
+        }
+
+        /* Hover states tailored for each action type */
+        .premium-dropdown .dropdown-item-edit:hover {
+            background: rgba(13, 110, 253, 0.08) !important;
+            color: #0d6efd !important;
+        }
+        .premium-dropdown .dropdown-item-edit:hover i {
+            color: #0d6efd !important;
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .premium-dropdown .dropdown-item-archive:hover {
+            background: rgba(108, 117, 125, 0.08) !important;
+            color: #6c757d !important;
+        }
+        .premium-dropdown .dropdown-item-archive:hover i {
+            color: #6c757d !important;
+            transform: scale(1.1) translateY(-1px);
+        }
+
+        .premium-dropdown .dropdown-item-delete {
+            color: #dc3545 !important;
+        }
+        .premium-dropdown .dropdown-item-delete i {
+            color: #dc3545 !important;
+        }
+        .premium-dropdown .dropdown-item-delete:hover {
+            background: rgba(220, 53, 69, 0.08) !important;
+            color: #dc3545 !important;
+        }
+        .premium-dropdown .dropdown-item-delete:hover i {
+            color: #dc3545 !important;
+            animation: premiumDeleteIconShake 0.3s ease;
+        }
+
+        @keyframes premiumDeleteIconShake {
+            0%, 100% { transform: rotate(0) scale(1.1); }
+            25% { transform: rotate(-8deg) scale(1.1); }
+            75% { transform: rotate(8deg) scale(1.1); }
+        }
+
+        .premium-dropdown .dropdown-item i {
+            font-size: 1rem !important;
+            transition: transform 0.2s ease, color 0.2s ease !important;
+        }
+
+        .premium-dropdown .dropdown-divider {
+            margin: 4px 6px !important;
+            border-color: var(--rs-soft-border) !important;
+            opacity: 0.4 !important;
+        }
+
+        /* Premium Modal Design */
+        .premium-modal {
+            border: 1px solid var(--rs-soft-border) !important;
+            background: var(--rs-card-bg) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.15) !important;
+            border-color: var(--rs-border) !important;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-modal {
+            background: #151a21 !important;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .premium-modal-dialog {
+            max-width: 550px !important;
+        }
+
+        .premium-modal .modal-header {
+            border-bottom: 1px solid var(--rs-soft-border) !important;
+            padding: 20px 28px !important;
+            background: rgba(0, 0, 0, 0.005);
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+        }
+        
+        .premium-modal .modal-title {
+            font-weight: 700 !important;
+            letter-spacing: -0.3px;
+            color: var(--rs-text);
+            font-size: 1.2rem !important;
+        }
+
+        .premium-modal .btn-close {
+            background-color: var(--rs-hover-bg) !important;
+            border-radius: 50% !important;
+            padding: 8px !important;
+            font-size: 0.8rem !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            opacity: 0.7 !important;
+            border: 0 !important;
+            margin: 0 !important;
+        }
+
+        .premium-modal .btn-close:hover {
+            opacity: 1 !important;
+            transform: rotate(90deg) !important;
+            background-color: rgba(220, 53, 69, 0.1) !important;
+        }
+
+        .premium-modal .modal-body {
+            padding: 28px 32px !important;
+        }
+
+        /* Spacious Spacing */
+        .form-group-spaced {
+            margin-bottom: 1.5rem !important;
+        }
+
+        /* Modern Labels */
+        .premium-label {
+            font-size: 0.75rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.8px !important;
+            font-weight: 700 !important;
+            color: var(--rs-muted) !important;
+            margin-bottom: 8px !important;
+            display: block;
+        }
+
+        /* Premium Inputs & Selects */
+        .premium-input {
+            background-color: #f8fafc !important;
+            border: 1.5px solid #e2e8f0 !important;
+            color: var(--rs-text) !important;
+            border-radius: 12px !important;
+            padding: 11px 16px !important;
+            font-size: 0.92rem !important;
+            font-weight: 500 !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-input {
+            background-color: #0e1116 !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+            color: #f1f5f9 !important;
+        }
+
+        .premium-input:focus {
+            background-color: var(--rs-card-bg) !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
+            outline: 0;
+        }
+
+        /* Coursework Switch Premium Card */
+        .coursework-card {
+            border: 1px solid rgba(16, 185, 129, 0.15) !important;
+            background: rgba(16, 185, 129, 0.03) !important;
+            border-radius: 14px !important;
+            padding: 16px 20px !important;
+            margin-bottom: 1.5rem !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+        
+        .coursework-card:hover {
+            background: rgba(16, 185, 129, 0.05) !important;
+            border-color: rgba(16, 185, 129, 0.25) !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.05) !important;
+        }
+
+        :root[data-bs-theme="dark"] .coursework-card {
+            border-color: rgba(16, 185, 129, 0.2) !important;
+            background: rgba(16, 185, 129, 0.04) !important;
+        }
+
+        .coursework-card .form-check-input {
+            width: 2.8em !important;
+            height: 1.4em !important;
+            cursor: pointer !important;
+            background-color: #cbd5e1 !important;
+            border-color: #cbd5e1 !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -1 8 8'%3e%3ccircle cx='4' cy='4' r='3' fill='%23fff'/%3e%3c/svg%3e") !important;
+            transition: background-position 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        :root[data-bs-theme="dark"] .coursework-card .form-check-input {
+            background-color: rgba(255,255,255,0.15) !important;
+            border-color: rgba(255,255,255,0.15) !important;
+        }
+
+        .coursework-card .form-check-input:checked {
+            background-color: #10b981 !important;
+            border-color: #10b981 !important;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15) !important;
+        }
+
+        /* Premium Select list for groups */
+        .premium-select-list {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 14px !important;
+            max-height: 200px !important;
+            overflow-y: auto !important;
+            padding: 8px !important;
+            background: #f8fafc !important;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.01) !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-select-list {
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            background: #0e1116 !important;
+        }
+
+        .premium-select-list::-webkit-scrollbar {
+            width: 5px !important;
+        }
+        .premium-select-list::-webkit-scrollbar-track {
+            background: transparent !important;
+        }
+        .premium-select-list::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15) !important;
+            border-radius: 10px !important;
+        }
+        :root[data-bs-theme="dark"] .premium-select-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15) !important;
+        }
+        .premium-select-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3) !important;
+        }
+        :root[data-bs-theme="dark"] .premium-select-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3) !important;
+        }
+
+        .premium-group-row {
+            display: flex !important;
+            align-items: center !important;
+            padding: 10px 14px !important;
+            margin-bottom: 4px !important;
+            border-radius: 10px !important;
+            cursor: pointer !important;
+            background: var(--rs-card-bg) !important;
+            border: 1px solid var(--rs-border) !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        .premium-group-row:hover {
+            background-color: var(--rs-hover-bg) !important;
+            border-color: rgba(59, 130, 246, 0.25) !important;
+            transform: translateX(2px) !important;
+        }
+
+        /* Beautiful modern checkbox with appearance none */
+        .premium-group-row input[type="checkbox"] {
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            width: 18px !important;
+            height: 18px !important;
+            border: 2px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            background-color: var(--rs-card-bg) !important;
+            display: inline-grid !important;
+            place-content: center !important;
+            cursor: pointer !important;
+            margin: 0 !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            flex-shrink: 0 !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-group-row input[type="checkbox"] {
+            border-color: rgba(255, 255, 255, 0.2) !important;
+        }
+
+        .premium-group-row input[type="checkbox"]::before {
+            content: "" !important;
+            width: 10px !important;
+            height: 10px !important;
+            transform: scale(0) !important;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            background-color: #ffffff !important;
+            clip-path: polygon(14% 44%, 0 58%, 33% 90%, 100% 20%, 86% 7%, 33% 60%) !important;
+        }
+
+        .premium-group-row input[type="checkbox"]:checked {
+            background-color: #3b82f6 !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
+        }
+
+        .premium-group-row input[type="checkbox"]:checked::before {
+            transform: scale(1) !important;
+        }
+
+        .premium-group-row input[type="checkbox"]:hover {
+            border-color: #3b82f6 !important;
+        }
+
+        .premium-group-row label {
+            margin-left: 0 !important;
+            padding-left: 12px !important;
+            font-weight: 500 !important;
+            font-size: 0.88rem !important;
+            color: var(--rs-text) !important;
+            cursor: pointer !important;
+            margin-bottom: 0 !important;
+            flex-grow: 1 !important;
+            user-select: none !important;
+        }
+
+        /* Premium Custom Upload Zone */
+        .premium-upload-zone {
+            border: 2px dashed #cbd5e1 !important;
+            background: #f8fafc !important;
+            border-radius: 14px !important;
+            padding: 24px 20px !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-upload-zone {
+            border-color: rgba(255, 255, 255, 0.15) !important;
+            background: #0e1116 !important;
+        }
+
+        .premium-upload-zone:hover {
+            border-color: #3b82f6 !important;
+            background: rgba(59, 130, 246, 0.02) !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-upload-zone:hover {
+            background: rgba(59, 130, 246, 0.04) !important;
+        }
+
+        .premium-upload-zone.dragover {
+            border-color: #10b981 !important;
+            background: rgba(16, 185, 129, 0.04) !important;
+        }
+
+        .premium-upload-zone .upload-icon {
+            font-size: 2.2rem !important;
+            color: #94a3b8 !important;
+            margin-bottom: 8px !important;
+            display: inline-block !important;
+            transition: transform 0.2s ease !important;
+        }
+
+        .premium-upload-zone:hover .upload-icon {
+            transform: translateY(-2px) !important;
+            color: #3b82f6 !important;
+        }
+
+        .premium-upload-zone .upload-title {
+            font-weight: 600 !important;
+            font-size: 0.9rem !important;
+            color: var(--rs-text) !important;
+            margin-bottom: 2px !important;
+        }
+
+        .premium-upload-zone .upload-subtitle {
+            font-size: 0.76rem !important;
+            color: #64748b !important;
+        }
+
+        :root[data-bs-theme="dark"] .premium-upload-zone .upload-subtitle {
+            color: rgba(255, 255, 255, 0.5) !important;
+        }
+
+        .premium-upload-zone .upload-zone-preview {
+            background: var(--rs-card-bg) !important;
+            border-radius: 10px !important;
+            border: 1px solid var(--rs-border) !important;
+            padding: 10px 14px !important;
+            transition: all 0.2s ease !important;
+        }
+
+        /* Premium Buttons */
+        .premium-btn-gradient {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+            border: 0 !important;
+            border-radius: 12px !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+            padding: 12px 20px !important;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2) !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        .premium-btn-gradient:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.3) !important;
+            color: #ffffff !important;
+        }
+        
+        .premium-btn-gradient:active {
+            transform: translateY(1px) !important;
+        }
+
+        /* Premium CSS Switch (Crooked switch fix) */
+        .premium-switch {
+            position: relative !important;
+            display: inline-block !important;
+            width: 46px !important;
+            height: 24px !important;
+            margin: 0 !important;
+        }
+        .premium-switch input {
+            opacity: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .switch-slider {
+            position: absolute !important;
+            cursor: pointer !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            background-color: #cbd5e1 !important;
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            border-radius: 24px !important;
+        }
+        :root[data-bs-theme="dark"] .switch-slider {
+            background-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .switch-slider:before {
+            position: absolute !important;
+            content: "" !important;
+            height: 18px !important;
+            width: 18px !important;
+            left: 3px !important;
+            bottom: 3px !important;
+            background-color: white !important;
+            transition: .3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            border-radius: 50% !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+        }
+        .premium-switch input:checked + .switch-slider {
+            background-color: #10b981 !important;
+        }
+        .premium-switch input:checked + .switch-slider:before {
+            transform: translateX(22px) !important;
+        }
+
+        /* Soft Placeholder Styles */
+        .premium-input::placeholder {
+            color: #94a3b8 !important;
+            font-weight: 400 !important;
+            opacity: 0.8 !important;
+        }
+        :root[data-bs-theme="dark"] .premium-input::placeholder {
+            color: rgba(255, 255, 255, 0.35) !important;
+            opacity: 0.8 !important;
+        }
+
+        /* Premium Floating Search Suggestions */
+        .search-suggestions-dropdown {
+            position: absolute !important;
+            top: 100% !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: var(--rs-card-bg) !important;
+            border: 1px solid var(--rs-soft-border) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12) !important;
+            z-index: 1050 !important;
+            margin-top: 4px !important;
+            max-height: 320px !important;
+            overflow-y: auto !important;
+            padding: 8px !important;
+            backdrop-filter: blur(12px) !important;
+            transition: all 0.2s ease !important;
+        }
+
+        :root[data-bs-theme="dark"] .search-suggestions-dropdown {
+            background: rgba(21, 26, 33, 0.95) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        .suggestion-item {
+            display: flex !important;
+            align-items: center !important;
+            padding: 10px 14px !important;
+            border-radius: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            margin-bottom: 2px !important;
+            border: 1px solid transparent !important;
+        }
+
+        .suggestion-item:last-child {
+            margin-bottom: 0 !important;
+        }
+
+        .suggestion-item:hover {
+            background: var(--rs-hover-bg) !important;
+            border-color: rgba(59, 130, 246, 0.1) !important;
+            transform: translateX(2px) !important;
+        }
+
+        .suggestion-icon {
+            width: 32px !important;
+            height: 32px !important;
+            border-radius: 8px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin-right: 12px !important;
+            font-size: 1rem !important;
+            flex-shrink: 0 !important;
+        }
+
+        .suggestion-icon.course {
+            background: rgba(13, 110, 253, 0.08) !important;
+            color: #0d6efd !important;
+        }
+
+        .suggestion-icon.group {
+            background: rgba(108, 117, 125, 0.08) !important;
+            color: #6c757d !important;
+        }
+
+        .suggestion-icon.student {
+            background: rgba(16, 185, 129, 0.08) !important;
+            color: #10b981 !important;
+        }
+
+        .suggestion-content {
+            flex-grow: 1 !important;
+            overflow: hidden !important;
+        }
+
+        .suggestion-text {
+            font-weight: 600 !important;
+            font-size: 0.88rem !important;
+            color: var(--rs-text) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            text-align: left !important;
+        }
+
+        .suggestion-subtext {
+            font-size: 0.74rem !important;
+            color: var(--rs-muted) !important;
+            margin-top: 1px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            text-align: left !important;
+        }
+    </style>
+</head>
+<body>
+{% from "partials/settings.html" import settings_button, settings_modal %}
+
+<div class="container py-5">
+    <div class="row align-items-center mb-4 g-3">
+        <div class="col-md">
+            <h2 class="m-0 fw-bold" id="greetingTitle">
+              Здравствуйте{% if greeting_name %}, {{ greeting_name }}{% endif %}! 👋
+            </h2>
+        </div>
+        <div class="col-md-auto">
+            <div class="d-flex align-items-center flex-wrap gap-2 justify-content-start justify-content-md-end">
+                {{ settings_button() }}
+
+                <a class="btn btn-outline-primary d-inline-flex align-items-center gap-2 px-3 py-2" href="{{ url_for('journal_page') }}" style="border-radius: 8px; font-weight: 500; transition: all 0.2s;">
+                    <i class="bi bi-journal-bookmark-fill"></i> <span>Журнал</span>
+                </a>
+
+                <button class="btn btn-outline-primary d-inline-flex align-items-center gap-2 px-3 py-2" data-bs-toggle="modal" data-bs-target="#studentsModal" style="border-radius: 8px; font-weight: 500; transition: all 0.2s;">
+                    <i class="bi bi-people-fill"></i> <span>База студентов</span>
+                </button>
+                <button class="btn btn-primary shadow-sm border-0 d-inline-flex align-items-center gap-2 px-3 py-2" data-bs-toggle="modal" data-bs-target="#manageModal" onclick="prepareCreateCourseUX()" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7); border-radius: 8px; font-weight: 600; transition: all 0.2s;">
+                    <i class="bi bi-plus-lg"></i> <span>Создать курс</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm p-3 mb-4">
+        <form action="/" method="GET" id="filterForm">
+            <input type="hidden" name="year" id="inputYear" value="{{ selected_year or '' }}">
+            <input type="hidden" name="semester" id="inputSemester" value="{{ selected_sem or '' }}">
+            <input type="hidden" name="group_id" id="inputGroupId" value="{{ selected_group_id or '' }}">
+            <input type="hidden" name="sort" id="inputSort" value="{{ selected_sort or 'title_asc' }}">
+
+            <div class="position-relative mb-3">
+                <div class="input-group m-0">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" name="search" id="mainSearchInput" class="form-control border-start-0" placeholder="Поиск: ФИО, Группа или Дисциплина..." value="{{ search }}" autocomplete="off">
+                    <button type="submit" class="btn btn-primary">Найти</button>
+                    {% if search %} <a href="/" class="btn btn-outline-secondary">Сбросить</a> {% endif %}
+                </div>
+                <div class="search-suggestions-dropdown d-none" id="searchSuggestions"></div>
+            </div>
+
+            {% if not search %}
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <div class="dropdown">
+                        <button class="btn filter-btn w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="labelYear">{{ selected_year if selected_year else "Все годы" }}</span>
+                        </button>
+                        <div class="dropdown-menu w-100 dropdown-menu-scroll">
+                            <input type="text" class="form-control form-control-sm filter-search-input" placeholder="Поиск..." onkeyup="filterDropdown(this)">
+                            <a class="dropdown-item" href="#" onclick="setFilter('year','')">Все годы</a>
+                            {% for y in years %} <a class="dropdown-item" href="#" onclick="setFilter('year','{{ y }}')">{{ y }}</a> {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="dropdown">
+                        <button class="btn filter-btn w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="labelSemester">{{ selected_sem if selected_sem else "Все" }}</span>
+                        </button>
+                        <div class="dropdown-menu w-100 dropdown-menu-scroll">
+                            <a class="dropdown-item" href="#" onclick="setFilter('semester','')">Все</a>
+                            {% for i in range(1, 11) %}
+                                <a class="dropdown-item" href="#" onclick="setFilter('semester','{{ i }}')">{{ i }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="dropdown">
+                        <button class="btn filter-btn w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="labelGroup" class="text-truncate">
+                                {% if selected_group_id %}
+                                    {% for g in groups %}{% if g.id|string == selected_group_id %}{{ g.name }}{% endif %}{% endfor %}
+                                {% else %}
+                                    Все группы
+                                {% endif %}
+                            </span>
+                        </button>
+                        <div class="dropdown-menu w-100 dropdown-menu-scroll" id="filterGroupDropdownMenu">
+                            <input type="text" class="form-control form-control-sm filter-search-input" placeholder="Поиск группы..." onkeyup="filterDropdown(this)">
+                            <a class="dropdown-item" href="#" onclick="setFilter('group_id','')">Все группы</a>
+                            {% for g in groups %}
+                                <a class="dropdown-item filter-group-item" href="#" data-group-id="{{ g.id }}" data-group-name="{{ g.name }}" onclick="setFilter('group_id','{{ g.id }}')">{{ g.name }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="dropdown">
+                        <button class="btn filter-btn w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="labelSort">{{ sort_label }}</span>
+                        </button>
+                        <div class="dropdown-menu w-100 dropdown-menu-scroll">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','title_asc')">Название (А–Я)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','title_desc')">Название (Я–А)</a>
+                            <hr class="dropdown-divider">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','year_desc')">Год (новые)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','year_asc')">Год (старые)</a>
+                            <hr class="dropdown-divider">
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','semester_desc')">Семестр (убыв.)</a>
+                            <a class="dropdown-item" href="#" onclick="setFilter('sort','semester_asc')">Семестр (возр.)</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if search %} <div class="mb-3 text-muted ps-1">Найдено курсов: {{ results|length }}</div> {% endif %}
+
+  <div class="row">
+        {% if results %}
+            {% for item in results %}
+            {% set course = item.course %}
+            <div class="col-12">
+                <div class="card-course" data-href="{{ url_for('course_detail', course_id=course.id) }}">
+                    <div class="course-img-container">
+                        <img src="{{ url_for('course_image', course_id=course.id) }}" class="course-img" onerror="this.src='/placeholder'">
+                    </div>
+
+                    <div class="course-body">
+                        {% if item.reason %}
+                            <div><span class="reason-badge"><i class="bi bi-check-circle-fill me-1"></i>{{ item.reason }}</span></div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <h4 class="fw-bold m-0 text-body text-truncate" title="{{ course.title }}">{{ course.title }}</h4>
+
+                            <div class="dropdown ms-2">
+                                <button class="btn btn-light btn-sm rounded-circle" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end premium-dropdown">
+                                    <li>
+                                        <a class="dropdown-item dropdown-item-edit" href="#"
+                                           data-id="{{ course.id }}"
+                                           data-title="{{ course.title }}"
+                                           data-year="{{ course.year }}"
+                                           data-semester="{{ course.semester }}"
+                                           data-groupids="{{ course.group_ids }}"
+                                           data-coursework="{{ 'true' if course.is_coursework else 'false' }}"
+                                           onclick="openEditModal(this)">
+                                           <i class="bi bi-pencil-fill me-2 text-primary"></i>Редактировать
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <form action="/archive_course/{{ course.id }}" method="POST" onsubmit="return confirm('Переместить курс в архив?')" class="m-0 p-0">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="dropdown-item dropdown-item-archive">
+                                                <i class="bi bi-archive-fill me-2 text-secondary"></i>В архив
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form action="/delete_course/{{ course.id }}" method="POST" onsubmit="return confirm('Удалить курс?')" class="m-0 p-0">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="dropdown-item text-danger dropdown-item-delete">
+                                                <i class="bi bi-trash-fill me-2"></i>Удалить
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {% set has_year = (course.year|string|trim) %}
+                        {% set has_semester = (course.semester|int > 0) %}
+                        {% if has_year or has_semester %}
+                        <div class="text-muted small mb-2 d-flex align-items-center flex-wrap">
+                            {% if has_year %}
+                              <span><i class="bi bi-calendar"></i> {{ course.year }}</span>
+                            {% endif %}
+                            {% if has_year and has_semester %}<span class="mx-2 text-muted opacity-50">|</span>{% endif %}
+                            {% if has_semester %}
+                              <span><i class="bi bi-journal"></i> {{ course.semester }} семестр</span>
+                            {% endif %}
+                            {% if course.is_coursework %}
+                              <span class="mx-2 text-muted opacity-50">|</span>
+                              <span class="badge" style="background-color: rgba(16, 185, 129, 0.12) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.2) !important; border-radius: 6px; font-weight: 600; padding: 2px 6px; font-size: 0.7rem; letter-spacing: 0.2px; line-height: 1.1;">Курсовая работа</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            {% for g_name in course.get_group_names() %}
+                                <span class="group-badge">{{ g_name }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12 text-center py-5 text-muted">
+                <i class="bi bi-search display-4 opacity-25"></i>
+                <p class="mt-3">По вашему запросу ничего не найдено.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{{ settings_modal(app_version, show_archive=true, archive_target="#archiveModal") }}
+<div class="modal fade" id="manageModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered premium-modal-dialog">
+        <div class="modal-content premium-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title m-0"><i class="bi bi-plus-circle-fill text-primary me-2"></i>Новый курс</h5>
+                    <div class="text-muted small mt-1" style="font-size: 0.78rem;">Заполните информацию о дисциплине и выберите группы</div>
+                </div>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="/add_course" method="POST" enctype="multipart/form-data" id="createCourseForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+                    <div class="form-group-spaced">
+                        <label class="premium-label">Название дисциплины</label>
+                        <input type="text" name="title" class="form-control premium-input w-100" required id="createTitleInput" placeholder="Например: Математический анализ">
+                    </div>
+
+                    <div class="row form-group-spaced g-3">
+                        <div class="col">
+                            <label class="premium-label">Год</label>
+                            <input list="yearSuggestions" type="text" name="year" class="form-control premium-input w-100" id="createYearInput" placeholder="2024-2025">
+                            <datalist id="yearSuggestions">
+                                {% for y in years %}<option value="{{ y }}"></option>{% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col">
+                            <label class="premium-label">Семестр</label>
+                            <select name="semester" class="form-select premium-input w-100" id="createSemesterSelect">
+                                {% for i in range(1, 11) %}<option value="{{i}}">{{i}}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="coursework-card">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <label class="fw-bold text-body m-0" for="createIsCoursework" style="cursor: pointer; font-size: 0.92rem; user-select: none;">Курсовая работа</label>
+                            <label class="premium-switch">
+                                <input type="checkbox" name="is_coursework" id="createIsCoursework">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group-spaced">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="premium-label m-0">Группы</label>
+                            <span class="badge bg-secondary px-2" id="createGroupsCount" style="font-size: 0.72rem; border-radius: 6px;">0 выбрано</span>
+                        </div>
+
+                        <div class="d-flex gap-3 mb-2">
+                            <button type="button" class="btn btn-link text-decoration-none p-0 d-flex align-items-center gap-1" style="font-size: 0.78rem; font-weight: 600; color: #3b82f6;" onclick="toggleAllGroups('createGroupList', true)">
+                                <i class="bi bi-check-all fs-6"></i> Выбрать все
+                            </button>
+                            <button type="button" class="btn btn-link text-decoration-none p-0 d-flex align-items-center gap-1" style="font-size: 0.78rem; font-weight: 600; color: #64748b;" onclick="toggleAllGroups('createGroupList', false)">
+                                <i class="bi bi-x-circle fs-6"></i> Очистить
+                            </button>
+                        </div>
+
+                        <div class="position-relative mb-2">
+                            <span class="position-absolute top-50 start-0 translate-middle-y ps-3 text-muted" style="pointer-events: none; font-size: 0.85rem;">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" class="form-control form-control-sm premium-input w-100" placeholder="Найти группу..." onkeyup="filterCheckboxes(this, 'createGroupList')" style="padding-left: 36px !important;">
+                        </div>
+
+                        <div class="premium-select-list" id="createGroupList">
+                            {% for g in groups %}
+                            <div class="premium-group-row" data-group-id="{{ g.id }}">
+                                <input class="create-group-cb" type="checkbox" name="groups" value="{{ g.id }}" id="c_chk{{ g.id }}" onchange="updateCreateGroupsCount()">
+                                <label class="w-100" for="c_chk{{ g.id }}">{{ g.name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="form-group-spaced">
+                        <label class="premium-label">Фото обложки</label>
+                        <div class="premium-upload-zone" id="createUploadZone" onclick="document.getElementById('createFileInput').click()">
+                            <input type="file" name="image" id="createFileInput" class="d-none" accept="image/*" onchange="handleFileSelect(this, 'createUploadZone')">
+                            <div class="upload-zone-content" id="createUploadContent">
+                                <i class="bi bi-cloud-arrow-up-fill upload-icon"></i>
+                                <div class="upload-title">Выберите обложку курса</div>
+                                <div class="upload-subtitle">Перетащите изображение сюда или нажмите для обзора</div>
+                            </div>
+                            <div class="upload-zone-preview d-none" id="createUploadPreview">
+                                <div class="d-flex align-items-center justify-content-between p-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-image text-primary fs-4"></i>
+                                        <span class="file-name text-truncate fw-semibold" style="max-width: 250px;"></span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 border-0" onclick="clearFileSelection(event, 'createFileInput', 'createUploadZone')">
+                                        <i class="bi bi-x-circle-fill fs-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn premium-btn-gradient w-100 py-2.5 mt-2">
+                        <i class="bi bi-plus-circle-fill me-2"></i>Создать курс
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editCourseModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered premium-modal-dialog">
+        <div class="modal-content premium-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title m-0"><i class="bi bi-pencil-square text-primary me-2"></i>Редактирование курса</h5>
+                    <div class="text-muted small mt-1" style="font-size: 0.78rem;">Измените необходимые параметры и сохраните курс</div>
+                </div>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCourseForm" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <div class="form-group-spaced">
+                        <label class="premium-label">Название дисциплины</label>
+                        <input type="text" name="title" id="editTitle" class="form-control premium-input w-100" required>
+                    </div>
+                    
+                    <div class="row form-group-spaced g-3">
+                        <div class="col">
+                            <label class="premium-label">Год</label>
+                            <input type="text" name="year" id="editYear" class="form-control premium-input w-100">
+                        </div>
+                        <div class="col">
+                            <label class="premium-label">Семестр</label>
+                            <select name="semester" id="editSemester" class="form-select premium-input w-100">
+                                {% for i in range(1, 11) %}<option value="{{i}}">{{i}}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="coursework-card">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <label class="fw-bold text-body m-0" for="editIsCoursework" style="cursor: pointer; font-size: 0.92rem; user-select: none;">Курсовая работа</label>
+                            <label class="premium-switch">
+                                <input type="checkbox" name="is_coursework" id="editIsCoursework">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-spaced">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="premium-label m-0">Группы</label>
+                        </div>
+
+                        <div class="position-relative mb-2">
+                            <span class="position-absolute top-50 start-0 translate-middle-y ps-3 text-muted" style="pointer-events: none; font-size: 0.85rem;">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" class="form-control form-control-sm premium-input w-100" placeholder="Найти группу..." onkeyup="filterCheckboxes(this, 'editGroupList')" style="padding-left: 36px !important;">
+                        </div>
+
+                        <div class="premium-select-list" id="editGroupList">
+                            {% for g in groups %}
+                            <div class="premium-group-row" data-group-id="{{ g.id }}">
+                                <input class="edit-group-cb" type="checkbox" name="groups" value="{{ g.id }}" id="e_chk{{ g.id }}">
+                                <label class="w-100" for="e_chk{{ g.id }}">{{ g.name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-spaced">
+                        <label class="premium-label">Новое фото обложки</label>
+                        <input type="file" name="image" class="form-control premium-input premium-file-input" accept="image/*">
+                    </div>
+                    
+                    <button type="submit" class="btn premium-btn-gradient w-100 py-2.5 mt-2">
+                        Сохранить изменения
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="archiveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-archive me-2"></i>Архив курсов</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if archived_courses %}
+                    <div class="list-group">
+                        {% for c in archived_courses %}
+                            <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                                <div class="me-auto">
+                                    <div class="fw-semibold text-body">{{ c.title }}</div>
+                                    <div class="text-muted small mt-1">
+                                        <i class="bi bi-calendar"></i> {{ c.year }} &nbsp;|&nbsp;
+                                        <i class="bi bi-journal"></i> {{ c.semester }} семестр
+                                    </div>
+                                    <div class="mt-2" style="overflow:hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                        {% for g_name in c.get_group_names() %}
+                                            <span class="group-badge">{{ g_name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('course_detail', course_id=c.id) }}" title="Открыть курс">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                    <form action="/unarchive_course/{{ c.id }}" method="POST" class="m-0">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Вернуть
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-archive display-6 opacity-25"></i>
+                        <div class="mt-2">Архив пуст</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="studentsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content h-100">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2">
+                    <i class="bi bi-people-fill text-primary"></i>
+                    <span>База данных студентов</span>
+                </h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <div class="row g-0 h-100">
+                    
+                    <div class="col-md-3 border-end bg-light p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="uppercase-tracking m-0">Учебные группы</h6>
+                        </div>
+
+                        <div class="input-group mb-3 shadow-sm" style="border-radius: 8px; overflow: hidden; height: 36px;">
+                            <input type="text" id="newGroupName" class="form-control border-end-0" placeholder="Название группы..." style="font-size: 0.82rem; height: 36px;" onkeydown="if(event.key==='Enter'){event.preventDefault(); createGroup();}">
+                            <button class="btn btn-primary px-3 border-start-0 d-flex align-items-center justify-content-center" type="button" onclick="createGroup()" style="font-size: 0.82rem; height: 36px;">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+
+                        <div style="height: 400px; overflow-y: auto; overflow-x: hidden; padding-right: 2px;">
+                            <div id="groupsListContainer">
+                                {% for g in groups %}
+                                <div class="group-list-item d-flex justify-content-between align-items-center" data-id="{{ g.id }}" data-name="{{ g.name }}" onclick="selectGroup(this)">
+                                    <span class="group-name text-truncate">{{ g.name }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none group-del-btn" title="Удалить группу"
+                                            onclick="event.stopPropagation(); deleteGroupFromBtn(this);">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                    <div class="col-md-5 border-end p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="uppercase-tracking m-0">Состав группы</h6>
+                            <span id="currentGroupTitle" class="badge bg-secondary px-2.5 py-1.5" style="border-radius: 6px; font-weight: 600;">--</span>
+                        </div>
+                        <div class="student-scroll-area p-2" id="studentsListArea">
+                            <p class="text-center text-muted mt-5">Выберите группу в левой колонке для просмотра состава</p>
+                        </div>
+                    </div>
+
+                    
+                    <div class="col-md-4 p-3 bg-light border-start">
+                        <div id="actionBlock" style="display:none;">
+                            <h6 class="uppercase-tracking mb-3">Импорт студентов</h6>
+                            <textarea id="bulkStudentsText" class="form-control mb-2" rows="8" placeholder="Вставьте список ФИО&#10;(по одному на строку)..." style="font-size: 0.85rem; border-radius: 8px; resize: none; border-color: var(--rs-soft-border);"></textarea>
+                            <button class="btn btn-primary w-100 mb-2 py-2 border-0 shadow-sm" type="button" onclick="addStudentsBulk()" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7); border-radius: 8px; font-weight: 600; font-size: 0.85rem;">
+                                <i class="bi bi-file-earmark-arrow-up me-2"></i>Загрузить список
+                            </button>
+                            
+                            <div class="text-center text-muted mb-2 small" style="font-size: 0.75rem;">— ИЛИ —</div>
+                            
+                            <input type="file" id="studentsFileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                            <button class="btn btn-outline-secondary w-100 mb-4 py-2" type="button" onclick="document.getElementById('studentsFileInput').click()" style="border-radius: 8px; font-weight: 500; font-size: 0.85rem;">
+                                <i class="bi bi-file-earmark-excel me-2"></i>Импортировать Excel / CSV
+                            </button>
+
+                            <hr style="opacity: 0.1;" class="my-4">
+
+                            <h6 class="uppercase-tracking mb-3">Переименовать группу</h6>
+                            <div class="input-group mb-4 shadow-sm" style="border-radius: 8px; overflow: hidden;">
+                                <input type="text" id="renameGroupInput" class="form-control py-2" placeholder="Новое название..." style="font-size: 0.85rem; border-color: var(--rs-soft-border);">
+                                <button class="btn btn-outline-primary px-3" type="button" onclick="renameGroup()">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </div>
+
+                            <div class="mt-4 p-3 rounded-3" style="background: rgba(13,110,253,0.03); border: 1px solid rgba(13,110,253,0.06);">
+                                <div class="small text-muted d-flex gap-2" style="font-size: 0.78rem; line-height: 1.35;">
+                                    <i class="bi bi-info-circle-fill text-primary" style="font-size: 1.15rem;"></i>
+                                    <span>Удаление учебной группы навсегда сотрет всех связанных с ней студентов и оценки в курсах.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="greetingNameModal" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Давайте познакомимся</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-2">Как к вам обращаться?</p>
+        <input type="text" class="form-control" id="greetingNameInput"
+               placeholder="Например: Климкин Егор Владимирович" maxlength="80" autocomplete="name">
+        <div class="invalid-feedback">Введите имя.</div>
+        <div class="form-text">Имя сохранится в базе и больше не будет запрашиваться.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" type="button" id="saveGreetingNameBtn">
+          <i class="bi bi-check2"></i> Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if update_available and update_url %}
+<div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateModalLabel">Доступно обновление версии {{ update_remote_version.lstrip('vV') }}🎉</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Доступна новая версия приложения.</p>
+        <div class="text-muted small">Текущая версия: <strong>{{ app_version.lstrip('vV') }}</strong></div>
+        <div class="text-muted small">Новая версия: <strong>{{ update_remote_version.lstrip('vV') }}</strong></div>
+
+      </div>
+      <div class="modal-footer d-flex justify-content-between align-items-center">
+        <button class="btn btn-outline-primary" type="button" id="viewChangesBtn" data-release-url="{{ update_release_url|default('', true) }}" {% if not update_release_url %}disabled{% endif %}>Посмотреть изменения</button>
+        <div class="d-flex gap-2 ms-auto">
+          <button class="btn btn-outline-secondary" type="button" id="updateLaterBtn" data-bs-dismiss="modal">Позже</button>
+          <button class="btn btn-primary" type="button" id="downloadUpdateBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}" data-exe-url="{{ update_exe_url|default('', true) }}">Скачать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="updateDownloadTypeModal" tabindex="-1" aria-labelledby="updateDownloadTypeModalLabel" aria-hidden="true" style="--bs-backdrop-opacity: .94;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="updateDownloadTypeModalLabel">Выберите формат загрузки</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-muted small mb-3">Доступны два варианта поставки обновления:</div>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-secondary text-start" type="button" id="downloadSourceBtn" data-source-url="{{ (update_source_url or update_url)|default('', true) }}">
+            Архив исходного кода (Open Source, .zip)
+          </button>
+          <button class="btn btn-outline-primary text-start" type="button" id="downloadExeBtn" data-exe-url="{{ update_exe_url|default('', true) }}" {% if not update_exe_url %}disabled{% endif %}>
+            Готовое приложение для Windows (.exe)
+          </button>
+        </div>
+        {% if not update_exe_url %}
+        <div class="small text-muted mt-3">Для этого релиза файл .exe пока не опубликован.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
+</script>
+
+{% if update_available and update_url %}
+<script>
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const modalEl = document.getElementById('updateModal');
+    const updateModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+    if (updateModal) {
+      updateModal.show();
+    }
+
+    const viewChangesBtn = document.getElementById('viewChangesBtn');
+    if (viewChangesBtn) {
+      viewChangesBtn.addEventListener('click', () => {
+        const rel = viewChangesBtn.dataset.releaseUrl;
+        if (rel) window.open(rel, '_blank');
+      });
+    }
+
+    const btn = document.getElementById('downloadUpdateBtn');
+    const downloadTypeModalEl = document.getElementById('updateDownloadTypeModal');
+    const downloadTypeModal = downloadTypeModalEl ? new bootstrap.Modal(downloadTypeModalEl) : null;
+    if (btn) {
+      btn.addEventListener('click', () => {
+        if (downloadTypeModal) {
+          if (updateModal) updateModal.hide();
+          setTimeout(() => downloadTypeModal.show(), 180);
+          return;
+        }
+        const fallbackUrl = btn.dataset.sourceUrl || btn.dataset.exeUrl;
+        if (fallbackUrl) window.open(fallbackUrl, '_blank');
+      });
+    }
+
+    const sourceBtn = document.getElementById('downloadSourceBtn');
+    if (sourceBtn) {
+      sourceBtn.addEventListener('click', () => {
+        const sourceUrl = sourceBtn.dataset.sourceUrl;
+        if (sourceUrl) window.open(sourceUrl, '_blank');
+      });
+    }
+
+    const exeBtn = document.getElementById('downloadExeBtn');
+    if (exeBtn) {
+      exeBtn.addEventListener('click', () => {
+        const exeUrl = exeBtn.dataset.exeUrl;
+        if (exeUrl) window.open(exeUrl, '_blank');
+      });
+    }
+
+    const laterBtn = document.getElementById('updateLaterBtn');
+    if (laterBtn) {
+      laterBtn.addEventListener('click', () => {
+        const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+        const token = tokenMeta ? tokenMeta.getAttribute('content') : '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['X-CSRFToken'] = token;
+        fetch('/api/update/remind_later', {
+          method: 'POST',
+          headers,
+          body: '{}'
+        }).catch(() => {});
+      });
+    }
+
+  });
+</script>
+{% endif %}
+<script>
+
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    const GREETING_META = document.querySelector('meta[name="greeting-name"]');
+    let GREETING_NAME = (GREETING_META ? GREETING_META.getAttribute('content') : '').trim();
+
+    if (!GREETING_NAME) GREETING_NAME = null;
+    if (GREETING_NAME && ['none', 'null', 'undefined'].includes(GREETING_NAME.toLowerCase())) {
+      GREETING_NAME = null;
+    }
+
+  function setGreetingName(name) {
+    const el = document.getElementById('greetingTitle');
+    if (!el) return;
+    el.textContent = name ? `Здравствуйте, ${name}! 👋` : 'Здравствуйте! 👋';
+  }
+
+  async function ensureGreetingName() {
+    if (GREETING_NAME) {
+      setGreetingName(GREETING_NAME);
+      return;
+    }
+
+    const modalEl = document.getElementById('greetingNameModal');
+    if (!modalEl) {
+      setGreetingName(null);
+      return;
+    }
+
+    const input = document.getElementById('greetingNameInput');
+    const btn = document.getElementById('saveGreetingNameBtn');
+
+    const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+    modal.show();
+    setTimeout(() => input && input.focus(), 250);
+
+    async function save() {
+      const name = (input.value || '').trim();
+      if (!name) {
+        input.classList.add('is-invalid');
+        input.focus();
+        return;
+      }
+      input.classList.remove('is-invalid');
+      btn.disabled = true;
+
+      try {
+        const r = await fetch('/api/greeting', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF_TOKEN
+          },
+          body: JSON.stringify({ name })
+        });
+
+        const d = await r.json();
+        if (!d || !d.success) {
+          alert((d && d.error) ? d.error : 'Не удалось сохранить имя');
+          btn.disabled = false;
+          return;
+        }
+
+        GREETING_NAME = d.name;
+        setGreetingName(GREETING_NAME);
+        modal.hide();
+      } catch (e) {
+        alert('Ошибка сети при сохранении имени');
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener('click', save);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') save();
+    });
+  }
+
+  function setFilter(type, value) {
+    if (type === 'year') document.getElementById('inputYear').value = value;
+    if (type === 'semester') document.getElementById('inputSemester').value = value;
+    if (type === 'group_id') document.getElementById('inputGroupId').value = value;
+    if (type === 'sort') document.getElementById('inputSort').value = value;
+    document.getElementById('filterForm').submit();
+  }
+
+  function filterDropdown(input) {
+    const f = input.value.toLowerCase();
+    const items = input.parentElement.getElementsByClassName('dropdown-item');
+    for (let i = 0; i < items.length; i++) {
+      items[i].style.display = (items[i].innerText.toLowerCase().indexOf(f) > -1) ? "" : "none";
+    }
+  }
+
+  function filterCheckboxes(input, containerId) {
+    const filter = (input.value || '').toLowerCase().trim();
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const divs = container.querySelectorAll('.form-check, .premium-group-row');
+    for (let i = 0; i < divs.length; i++) {
+      const label = divs[i].getElementsByTagName('label')[0];
+      if (label) {
+        const text = (label.textContent || label.innerText || '').toLowerCase();
+        if (text.indexOf(filter) > -1) {
+          divs[i].style.setProperty('display', 'flex', 'important');
+        } else {
+          divs[i].style.setProperty('display', 'none', 'important');
+        }
+      }
+    }
+  }
+
+  function openEditModal(el) {
+    document.getElementById('editCourseForm').action = '/edit_course/' + el.dataset.id;
+    document.getElementById('editTitle').value = el.dataset.title;
+    document.getElementById('editYear').value = el.dataset.year;
+    document.getElementById('editSemester').value = el.dataset.semester;
+    document.getElementById('editIsCoursework').checked = (el.dataset.coursework === 'true');
+
+    // Reset and clear any old selected file preview
+    clearFileSelection(null, 'editFileInput', 'editUploadZone');
+
+    const raw = (el.dataset.groupids || '').trim();
+    const gIds = raw ? raw.split(',') : [];
+
+    document.querySelectorAll('#editGroupList input').forEach(cb => {
+      cb.checked = gIds.includes(cb.value);
+    });
+
+    new bootstrap.Modal(document.getElementById('editCourseModal')).show();
+  }
+
+  function prepareCreateCourseUX() {
+    // Reset and clear any old selected file preview
+    clearFileSelection(null, 'createFileInput', 'createUploadZone');
+
+    setTimeout(() => {
+      const title = document.getElementById('createTitleInput');
+      if (title) title.focus();
+
+      const yearInput = document.getElementById('createYearInput');
+      if (yearInput && !yearInput.value.trim()) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth() + 1;
+        const start = (m >= 8) ? y : (y - 1);
+        yearInput.value = `${start}-${start + 1}`;
+      }
+      updateCreateGroupsCount();
+    }, 150);
+  }
+
+  function updateCreateGroupsCount() {
+    const cbs = document.querySelectorAll('.create-group-cb');
+    let cnt = 0;
+    cbs.forEach(cb => { if (cb.checked) cnt++; });
+    const badge = document.getElementById('createGroupsCount');
+    if (badge) badge.innerText = `${cnt} выбрано`;
+  }
+
+  function toggleAllGroups(containerId, state) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = state);
+    updateCreateGroupsCount();
+  }
+
+  function addGroupToCourseLists(g) {
+    const createList = document.getElementById('createGroupList');
+    if (createList && !createList.querySelector(`[data-group-id="${g.id}"]`)) {
+      const row = document.createElement('div');
+      row.className = 'premium-group-row';
+      row.dataset.groupId = g.id;
+
+      const cb = document.createElement('input');
+      cb.className = 'create-group-cb';
+      cb.type = 'checkbox';
+      cb.name = 'groups';
+      cb.value = g.id;
+      cb.id = 'c_chk' + g.id;
+      cb.addEventListener('change', updateCreateGroupsCount);
+
+      const label = document.createElement('label');
+      label.className = 'w-100';
+      label.htmlFor = cb.id;
+      label.textContent = g.name;
+
+      row.appendChild(cb);
+      row.appendChild(label);
+      createList.appendChild(row);
+      updateCreateGroupsCount();
+    }
+
+    const editList = document.getElementById('editGroupList');
+    if (editList && !editList.querySelector(`[data-group-id="${g.id}"]`)) {
+      const row = document.createElement('div');
+      row.className = 'premium-group-row';
+      row.dataset.groupId = g.id;
+
+      const cb = document.createElement('input');
+      cb.className = 'edit-group-cb';
+      cb.type = 'checkbox';
+      cb.name = 'groups';
+      cb.value = g.id;
+      cb.id = 'e_chk' + g.id;
+
+      const label = document.createElement('label');
+      label.className = 'w-100';
+      label.htmlFor = cb.id;
+      label.textContent = g.name;
+
+      row.appendChild(cb);
+      row.appendChild(label);
+      editList.appendChild(row);
+    }
+
+    const menu = document.getElementById('filterGroupDropdownMenu');
+    if (menu && !menu.querySelector(`.filter-group-item[data-group-id="${g.id}"]`)) {
+      const a = document.createElement('a');
+      a.className = 'dropdown-item filter-group-item';
+      a.href = '#';
+      a.dataset.groupId = g.id;
+      a.dataset.groupName = g.name;
+      a.textContent = g.name;
+      a.addEventListener('click', (ev) => { ev.preventDefault(); setFilter('group_id', String(g.id)); });
+      menu.appendChild(a);
+    }
+  }
+
+  function renameGroupEverywhere(groupId, newName) {
+    const item = document.querySelector(`.group-list-item[data-id="${groupId}"]`);
+    if (item) {
+      item.dataset.name = newName;
+      const nameEl = item.querySelector('.group-name');
+      if (nameEl) nameEl.textContent = newName;
+      else item.textContent = newName;
+    }
+
+    const cLabel = document.querySelector(`label[for="c_chk${groupId}"]`);
+    if (cLabel) cLabel.textContent = newName;
+    const eLabel = document.querySelector(`label[for="e_chk${groupId}"]`);
+    if (eLabel) eLabel.textContent = newName;
+
+    const fItem = document.querySelector(`.filter-group-item[data-group-id="${groupId}"]`);
+    if (fItem) { fItem.dataset.groupName = newName; fItem.textContent = newName; }
+
+    if (String(activeGroupId) === String(groupId)) {
+      document.getElementById('currentGroupTitle').innerText = newName;
+    }
+  }
+
+  function removeGroupEverywhere(groupId) {
+    const item = document.querySelector(`.group-list-item[data-id="${groupId}"]`);
+    if (item) item.remove();
+
+    const cRow = document.querySelector(`#createGroupList [data-group-id="${groupId}"]`);
+    if (cRow) cRow.remove();
+    const eRow = document.querySelector(`#editGroupList [data-group-id="${groupId}"]`);
+    if (eRow) eRow.remove();
+
+    const fItem = document.querySelector(`.filter-group-item[data-group-id="${groupId}"]`);
+    if (fItem) fItem.remove();
+
+    updateCreateGroupsCount();
+  }
+
+  /* Premium Custom File Upload Helpers */
+  function handleFileSelect(input, zoneId) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    const content = zone.querySelector('.upload-zone-content');
+    const preview = zone.querySelector('.upload-zone-preview');
+    const fileNameEl = zone.querySelector('.file-name');
+
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      fileNameEl.textContent = file.name;
+      content.classList.add('d-none');
+      preview.classList.remove('d-none');
+      zone.style.borderColor = '#3b82f6';
+      zone.style.background = 'rgba(59, 130, 246, 0.02)';
+    } else {
+      clearFileSelection(null, input.id, zoneId);
+    }
+  }
+
+  function clearFileSelection(event, inputId, zoneId) {
+    if (event) {
+      event.stopPropagation(); // Stop click propagating to the parent dropzone!
+    }
+    const input = document.getElementById(inputId);
+    if (input) input.value = '';
+
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    const content = zone.querySelector('.upload-zone-content');
+    const preview = zone.querySelector('.upload-zone-preview');
+
+    content.classList.remove('d-none');
+    preview.classList.add('d-none');
+    zone.style.borderColor = '';
+    zone.style.background = '';
+  }
+
+  function setupDragAndDrop(zoneId, inputId) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    if (!zone || !input) return;
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      zone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('dragover');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      zone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('dragover');
+      }, false);
+    });
+
+    zone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length > 0) {
+        input.files = files;
+        handleFileSelect(input, zoneId);
+      }
+    }, false);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setupDragAndDrop('createUploadZone', 'createFileInput');
+    setupDragAndDrop('editUploadZone', 'editFileInput');
+  });
+
+  let activeGroupId = null;
+  let activeGroupName = null;
+
+  function createGroup() {
+    const input = document.getElementById('newGroupName');
+    const n = (input.value || '').trim();
+    if (!n) return;
+
+    fetch('/api/create_group', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN
+      },
+      body: JSON.stringify({ name: n })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          alert(d.error || 'Не удалось создать группу');
+          return;
+        }
+
+        input.value = '';
+        const g = d.group;
+        const container = document.getElementById('groupsListContainer');
+        const div = document.createElement('div');
+        div.className = 'group-list-item d-flex justify-content-between align-items-center';
+        div.dataset.id = g.id;
+        div.dataset.name = g.name;
+        div.addEventListener('click', () => selectGroup(div));
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'group-name text-truncate';
+        nameSpan.textContent = g.name;
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-sm btn-link text-danger text-decoration-none group-del-btn';
+        delBtn.title = 'Удалить группу';
+        delBtn.innerHTML = '<i class="bi bi-trash3"></i>';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteGroupById(String(g.id), g.name);
+        });
+
+        div.appendChild(nameSpan);
+        div.appendChild(delBtn);
+        container.appendChild(div);
+        addGroupToCourseLists(g);
+        selectGroup(div);
+      })
+      .catch(() => alert('Ошибка сети при создании группы'));
+  }
+
+  function selectGroup(el) {
+    activeGroupId = el.dataset.id;
+    activeGroupName = el.dataset.name;
+
+    document.querySelectorAll('.group-list-item').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+
+    document.getElementById('currentGroupTitle').innerText = activeGroupName;
+    document.getElementById('renameGroupInput').value = activeGroupName;
+    document.getElementById('actionBlock').style.display = 'block';
+
+    loadStudents(activeGroupId);
+  }
+
+  function deleteGroupFromBtn(btn) {
+    const item = btn && btn.closest ? btn.closest('.group-list-item') : null;
+    if (!item) return;
+    deleteGroupById(item.dataset.id, item.dataset.name);
+  }
+
+  function deleteGroupById(groupId, groupName) {
+    if (!groupId) return;
+
+    const name = groupName || 'группа';
+    const msg =
+      `Удалить группу "${name}" полностью?\n\n` +
+      `Будут удалены все студенты этой группы и группа будет убрана из курсов.`;
+
+    if (!confirm(msg)) return;
+
+    fetch('/api/delete_group/' + groupId, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          alert(d.error || 'Не удалось удалить группу');
+          return;
+        }
+
+        removeGroupEverywhere(groupId);
+
+        if (String(activeGroupId) === String(groupId)) {
+          activeGroupId = null;
+          activeGroupName = null;
+          document.getElementById('currentGroupTitle').innerText = '--';
+          document.getElementById('studentsListArea').innerHTML = '<p class="text-center text-muted mt-5">Выберите группу</p>';
+          document.getElementById('actionBlock').style.display = 'none';
+        }
+      })
+      .catch(() => alert('Ошибка сети при удалении группы'));
+  }
+
+  function deleteStudent(studentId) {
+    if (!activeGroupId) return;
+    if (!confirm('Вы уверены, что хотите удалить студента?')) return;
+
+    fetch('/api/delete_student/' + studentId, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) loadStudents(activeGroupId);
+        else alert(d.error || 'Не удалось удалить студента');
+      })
+      .catch(() => alert('Ошибка сети при удалении студента'));
+  }
+
+  function loadStudents(id) {
+    const area = document.getElementById('studentsListArea');
+    area.innerHTML = '<div class="text-center text-muted mt-5">Загрузка…</div>';
+
+    fetch(`/api/get_students/${id}`)
+      .then(r => r.json())
+      .then(list => {
+        area.innerHTML = '';
+
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-center text-muted mt-5';
+          empty.textContent = 'В группе пока нет студентов';
+          area.appendChild(empty);
+          return;
+        }
+
+        const ul = document.createElement('ul');
+        ul.className = 'list-group list-group-flush';
+        list.forEach((s, idx) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+          const left = document.createElement('div');
+          left.className = 'd-flex align-items-center gap-2 flex-grow-1';
+
+          const span = document.createElement('span');
+          span.className = 'text-truncate';
+          span.textContent = `${idx + 1}. ${s.fio}`;
+          left.appendChild(span);
+
+          const actions = document.createElement('div');
+          actions.className = 'd-flex align-items-center gap-2';
+
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn btn-sm btn-link text-primary text-decoration-none';
+          editBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+          editBtn.title = 'Редактировать ФИО';
+          editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startEditStudent(li, s.id, s.fio, idx + 1);
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'btn btn-sm btn-link text-danger text-decoration-none';
+          delBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+          delBtn.title = 'Удалить студента';
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteStudent(s.id);
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(delBtn);
+
+          li.appendChild(left);
+          li.appendChild(actions);
+          ul.appendChild(li);
+        });
+
+        area.appendChild(ul);
+      })
+      .catch(() => {
+        area.innerHTML = '<div class="text-center text-danger mt-5">Ошибка загрузки</div>';
+      });
+  }
+
+  function startEditStudent(li, studentId, fio, num) {
+    if (!activeGroupId) return;
+
+    li.innerHTML = '';
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+    const left = document.createElement('div');
+    left.className = 'd-flex align-items-center gap-2 flex-grow-1';
+
+    const numSpan = document.createElement('span');
+    numSpan.className = 'text-muted';
+    numSpan.textContent = `${num}.`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm';
+    input.value = (fio || '').trim();
+    input.maxLength = 150;
+
+    left.appendChild(numSpan);
+    left.appendChild(input);
+
+    const actions = document.createElement('div');
+    actions.className = 'd-flex align-items-center gap-2';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-success';
+    saveBtn.innerHTML = '<i class="bi bi-check2"></i>';
+    saveBtn.title = 'Сохранить';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-sm btn-outline-secondary';
+    cancelBtn.innerHTML = '<i class="bi bi-x"></i>';
+    cancelBtn.title = 'Отмена';
+
+    saveBtn.addEventListener('click', () => commitEditStudent(studentId, input.value));
+    cancelBtn.addEventListener('click', () => loadStudents(activeGroupId));
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEditStudent(studentId, input.value);
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        loadStudents(activeGroupId);
+      }
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
+
+    li.appendChild(left);
+    li.appendChild(actions);
+
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  async function commitEditStudent(studentId, fio) {
+    const n = (fio || '').trim();
+    if (!n) { alert('Введите ФИО'); return; }
+
+    try {
+      const r = await fetch('/api/update_student/' + studentId, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify({ fio: n })
+      });
+      const d = await r.json();
+      if (!d || !d.success) {
+        alert((d && d.error) ? d.error : 'Не удалось сохранить');
+        return;
+      }
+      loadStudents(activeGroupId);
+    } catch (e) {
+      alert('Ошибка сети при сохранении');
+    }
+  }
+
+  function renameGroup() {
+    const input = document.getElementById('renameGroupInput');
+    const n = (input.value || '').trim();
+    if (!activeGroupId || !n) return;
+
+    fetch('/api/rename_group', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN
+      },
+      body: JSON.stringify({ id: activeGroupId, name: n })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) {
+          alert(d.error || 'Не удалось переименовать группу');
+          return;
+        }
+        activeGroupName = d.group.name;
+        renameGroupEverywhere(activeGroupId, activeGroupName);
+      })
+      .catch(() => alert('Ошибка сети при переименовании'));
+  }
+
+  function addStudentsBulk() {
+    const t = document.getElementById('bulkStudentsText').value;
+    if (!activeGroupId || !t.trim()) return;
+
+    fetch('/api/add_students_bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN
+      },
+      body: JSON.stringify({ group_id: activeGroupId, text: t })
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          document.getElementById('bulkStudentsText').value = '';
+          loadStudents(activeGroupId);
+        } else {
+          alert(d.error || 'Не удалось добавить студентов');
+        }
+      })
+      .catch(() => alert('Ошибка сети при добавлении студентов'));
+  }
+
+  function deleteActiveGroup() {
+    if (!activeGroupId) return;
+    deleteGroupById(activeGroupId, activeGroupName);
+  }
+
+  function wireCourseCardLinks() {
+    document.querySelectorAll('.card-course[data-href]').forEach(card => {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        if (
+          e.target.closest('.dropdown') ||
+          e.target.closest('button') ||
+          e.target.closest('form') ||
+          e.target.closest('input') ||
+          e.target.closest('a')
+        ) return;
+
+        window.location.href = card.dataset.href;
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    wireCourseCardLinks();
+    updateCreateGroupsCount();
+    ensureGreetingName();
+
+    const fileInput = document.getElementById('studentsFileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file || !activeGroupId) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('group_id', activeGroupId);
+
+        fetch('/api/import_students_file', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': CSRF_TOKEN
+          },
+          body: formData
+        })
+          .then(r => r.json())
+          .then(d => {
+            fileInput.value = '';
+            if (d.success) {
+              alert(`Успешно добавлено студентов: ${d.added} из найденных ${d.total_found}`);
+              loadStudents(activeGroupId);
+            } else {
+              alert(d.error || 'Не удалось импортировать файл');
+            }
+          })
+          .catch(() => {
+            fileInput.value = '';
+            alert('Ошибка сети при импорте файла');
+          });
+      });
+    }
+
+    /* Floating Autocomplete Search Suggestions JS */
+    const searchInput = document.getElementById('mainSearchInput');
+    const suggestionsBox = document.getElementById('searchSuggestions');
+    if (searchInput && suggestionsBox) {
+      let debounceTimer;
+
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = (searchInput.value || '').trim();
+        if (query.length < 1) {
+          suggestionsBox.classList.add('d-none');
+          return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+          try {
+            const res = await fetch(`/api/search_suggestions?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            if (data && data.success && data.suggestions && data.suggestions.length > 0) {
+              renderSuggestions(data.suggestions);
+            } else {
+              suggestionsBox.classList.add('d-none');
+            }
+          } catch (e) {
+            console.error('Error loading search suggestions', e);
+          }
+        }, 180);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+          suggestionsBox.classList.add('d-none');
+        }
+      });
+
+      searchInput.addEventListener('focus', () => {
+        const query = (searchInput.value || '').trim();
+        if (query.length > 0 && suggestionsBox.children.length > 0) {
+          suggestionsBox.classList.remove('d-none');
+        }
+      });
+
+      function renderSuggestions(list) {
+        suggestionsBox.innerHTML = '';
+        list.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'suggestion-item';
+
+          let iconClass = 'bi-journal-bookmark-fill';
+          if (item.type === 'group') iconClass = 'bi-people-fill';
+          if (item.type === 'student') iconClass = 'bi-person-fill';
+
+          row.innerHTML = `
+            <div class="suggestion-icon ${item.type}">
+              <i class="bi ${iconClass}"></i>
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-text">${item.text}</div>
+              <div class="suggestion-subtext">${item.subtext}</div>
+            </div>
+          `;
+
+          row.addEventListener('click', () => {
+            searchInput.value = item.value;
+            suggestionsBox.classList.add('d-none');
+            searchInput.closest('form').submit();
+          });
+
+          suggestionsBox.appendChild(row);
+        });
+        suggestionsBox.classList.remove('d-none');
+      }
+    }
+  });
+</script>
+
+
+</body>
+</html>

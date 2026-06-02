@@ -1,0 +1,3 @@
+from utils.practice.models import init_practice_models
+from utils.practice.routes import register_practice_routes
+from utils.practice.excel_export import register_excel_export_routes

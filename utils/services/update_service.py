@@ -4,7 +4,7 @@ import re
 import threading
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Tuple
 
 
@@ -132,7 +132,7 @@ class UpdateService:
 
     def check_for_updates(self) -> None:
         info = self._empty_info()
-        info["checked_at"] = datetime.utcnow()
+        info["checked_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         tag: Optional[str] = None
         download_url: Optional[str] = None
         source_url: Optional[str] = None
@@ -154,6 +154,34 @@ class UpdateService:
         except Exception:
             pass
 
+        if not tag:
+            try:
+                release = self._fetch_json(
+                    f"https://api.gitmirror.com/repos/{self.repo}/releases/latest",
+                )
+                if isinstance(release, dict):
+                    tag = (release.get("tag_name") or "").strip() or None
+                    download_url = self._select_release_download_url(release)
+                    source_url = self._build_source_archive_url(tag or "")
+                    exe_url = self._select_asset_download_url(release, (".exe",))
+                    release_url = (release.get("html_url") or "").strip() or None
+                    notes = (release.get("body") or "").strip() or None
+            except Exception:
+                pass
+
+        if not tag:
+            try:
+                data = self._fetch_json(
+                    f"https://data.jsdelivr.net/v1/package/gh/{self.repo}",
+                )
+                if isinstance(data, dict) and data.get("versions"):
+                    tag = str(data["versions"][0]).strip()
+                    release_url = f"https://github.com/{self.repo}/releases/tag/{tag}"
+                    source_url = self._build_source_archive_url(tag)
+                    download_url = source_url
+            except Exception:
+                pass
+
         if not tag or not (download_url or release_url):
             try:
                 fallback = self._fetch_latest_release_via_html()
@@ -173,7 +201,7 @@ class UpdateService:
         info["exe_url"] = exe_url
         info["release_url"] = release_url
         info["notes"] = notes
-        info["checked_at"] = datetime.utcnow()
+        info["checked_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if tag and _is_newer_version(tag, self.app_version):
             info["available"] = True

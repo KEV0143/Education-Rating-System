@@ -1,0 +1,4 @@
+from utils.routes.main_routes import register_main_routes
+from utils.routes.course_crud import register_course_crud_routes
+from utils.routes.student_routes import register_student_routes
+from utils.routes.course_detail import register_course_routes

@@ -15,7 +15,7 @@ def resource_dir() -> Path:
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             return Path(meipass)
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent.parent
 
 
 def _is_writable_dir(path: Path) -> bool:
@@ -47,7 +47,7 @@ def _runtime_data_candidates(app_dir_name: str) -> List[Path]:
         if appdata:
             candidates.append(Path(appdata) / app_dir_name)
     else:
-        candidates.append(Path(__file__).resolve().parent.parent)
+        candidates.append(Path(__file__).resolve().parent.parent.parent)
 
     unique: List[Path] = []
     seen = set()
@@ -68,7 +68,7 @@ def runtime_data_dir(app_dir_name: str) -> Path:
     for p in _runtime_data_candidates(app_dir_name):
         if _is_writable_dir(p):
             return p
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent.parent
 
 
 def ensure_sqlite_file(path: Path) -> None:

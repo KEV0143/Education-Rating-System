@@ -1,44 +1,50 @@
 import os
+import logging
 import secrets
 import threading
 import webbrowser
 
+from utils.core.logger_setup import setup_custom_logging
+setup_custom_logging()
+
+
 from flask import Flask, redirect, url_for
-from utils.course_routes import register_course_routes
-from utils.excel_export import register_excel_export_routes
-from utils.image_store import migrate_legacy_course_images
-from utils.journal_models import init_journal_models
-from utils.journal_routes import register_journal_routes
-from utils.practice_models import init_practice_models
-from utils.practice_routes import register_practice_routes
-from utils.app_routes import register_app_routes
-from utils.db import (
-    Course,
-    CourseImage,
+from utils import (
+    db,
+    prepare_sqlite_database,
+    init_db_app,
+    ensure_schema,
     Group,
     Student,
-    db,
-    ensure_schema,
+    Course,
+    CourseImage,
+    AppSetting,
     get_or_404,
     get_setting,
-    init_db_app,
-    normalize_group_ids,
-    parse_group_ids,
-    prepare_sqlite_database,
-    remove_group_id_from_csv,
     set_setting,
+    parse_group_ids,
+    normalize_group_ids,
+    remove_group_id_from_csv,
     upsert_course_image,
-)
-from utils.runtime_env import (
-    env_flag,
     parse_int,
     pick_available_port,
     resource_dir,
     runtime_data_dir,
+    UpdateService,
+    register_main_routes,
+    register_course_crud_routes,
+    register_student_routes,
+    register_course_routes,
+    init_practice_models,
+    register_practice_routes,
+    register_excel_export_routes,
+    init_journal_models,
+    register_journal_routes,
 )
-from utils.update_service import UpdateService
+from utils.services.runtime import env_flag
+from utils.services.image_store import migrate_legacy_course_images
 
-APP_VERSION = "v1.0.4"
+APP_VERSION = "v1.0.5"
 APP_DIR_NAME = "EducationRatingSystem"
 DEFAULT_APP_HOST = "127.0.0.1"
 DEFAULT_APP_PORT = 54791
@@ -56,10 +62,28 @@ app = Flask(
     static_folder=str(RESOURCE_DIR / "static"),
 )
 
-_, _, DB_URI = prepare_sqlite_database(DATA_DIR, filename="RatingSystemKev.db")
+def get_active_db_filename(data_dir) -> str:
+    active_json = data_dir / "db" / "active_db.json"
+    if active_json.exists():
+        try:
+            import json
+            data = json.loads(active_json.read_text(encoding="utf-8"))
+            content = data.get("active_database", "").strip()
+            if content and content.endswith(".db") and not os.path.isabs(content) and ".." not in content:
+                return content
+        except Exception:
+            pass
+    return "RatingSystemKev.db"
+
+
+db_filename = get_active_db_filename(DATA_DIR)
+_, _, DB_URI = prepare_sqlite_database(DATA_DIR, filename=db_filename)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+
+from sqlalchemy.pool import NullPool
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"poolclass": NullPool}
 
 init_db_app(app, DB_URI)
 update_service = UpdateService(
@@ -69,7 +93,7 @@ update_service = UpdateService(
     user_agent=UPDATE_USER_AGENT,
 )
 
-register_app_routes(
+register_main_routes(
     app=app,
     db=db,
     Course=Course,
@@ -90,6 +114,33 @@ register_app_routes(
     resource_dir=RESOURCE_DIR,
 )
 
+register_course_crud_routes(
+    app=app,
+    db=db,
+    Course=Course,
+    CourseImage=CourseImage,
+    Group=Group,
+    get_or_404=get_or_404,
+    normalize_group_ids=normalize_group_ids,
+    parse_group_ids=parse_group_ids,
+    remove_group_id_from_csv=remove_group_id_from_csv,
+    upsert_course_image=upsert_course_image,
+    parse_int=parse_int,
+    data_dir=DATA_DIR,
+    resource_dir=RESOURCE_DIR,
+)
+
+register_student_routes(
+    app=app,
+    db=db,
+    Group=Group,
+    Student=Student,
+    Course=Course,
+    remove_group_id_from_csv=remove_group_id_from_csv,
+    get_or_404=get_or_404,
+    parse_int=parse_int,
+)
+
 Practice, PracticeGrade, PracticeGroupInterval = init_practice_models(db)
 JournalLesson, JournalLessonSession, JournalAttendance = init_journal_models(db)
 
@@ -97,6 +148,13 @@ with app.app_context():
     db.create_all()
     ensure_schema()
     migrate_legacy_course_images(db, Course, CourseImage, data_dir=DATA_DIR, resource_dir=RESOURCE_DIR)
+    is_debug = env_flag("APP_DEBUG", True)
+    if not is_debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        name = get_setting("greeting_name")
+        name = name.strip() if name and name.strip() else "Гость"
+        logging.info(f"{name}, инициализация системы выполнена успешно.")
+        logging.info(f"Используется активная база данных: {db_filename}")
+    db.session.remove()
 
 register_course_routes(
     app,
@@ -177,7 +235,7 @@ if __name__ == "__main__":
     debug = env_flag("APP_DEBUG", True)
     auto_open_browser = env_flag("AUTO_OPEN_BROWSER", True)
 
-    update_service.check_for_updates()
+    threading.Thread(target=update_service.check_for_updates, daemon=True).start()
     if auto_open_browser:
         _start_browser_once(host, port, debug)
     app.run(host=host, port=port, debug=debug)

@@ -7,6 +7,7 @@
   <title>QR | {{ course.title }}</title>
 
   <script>
+
     (() => {
       const saved = localStorage.getItem('rs-theme');
       const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
@@ -149,12 +150,14 @@
 </div>
 
 <script id="qrViewBootstrap" type="application/json">
+
   {{ {
     "lesson_id": lesson.id,
     "lesson_date": lesson_date_iso
   } | tojson }}
 </script>
 <script>
+
   const BOOTSTRAP_RAW = (document.getElementById('qrViewBootstrap') || { textContent: '{}' }).textContent || '{}';
   let BOOTSTRAP = {};
   try {

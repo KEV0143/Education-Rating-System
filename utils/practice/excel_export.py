@@ -1,7 +1,6 @@
 import re
 from io import BytesIO
 from datetime import datetime
-
 from flask import send_file, abort, request
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
