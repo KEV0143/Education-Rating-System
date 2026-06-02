@@ -64,6 +64,12 @@ class StartupFilter(logging.Filter):
         return True
 
 def setup_custom_logging():
+    try:
+        import colorama
+        colorama.init()
+    except Exception:
+        pass
+
     handler = logging.StreamHandler()
     handler.setFormatter(CustomFormatter(use_color=True))
     handler.addFilter(StartupFilter())
